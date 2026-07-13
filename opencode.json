@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "coach_log_session": "allow",
+    "coach_safety_check": "allow",
+    "coach_recovery": "allow",
+    "coach_trend": "allow",
+    "coach_snapshot": "allow",
+    "coach_sessions": "allow",
+    "coach_injuries_list": "allow",
+    "coach_injuries_seed": "allow",
+    "coach_ingest": "allow"
+  }
+}

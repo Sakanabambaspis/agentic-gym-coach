@@ -1,12 +1,13 @@
 # AGENTS.md — THIN_MUSCLE_OS
 
-Workspace state: **docs-only** (5 .md files). No code scaffolded yet. Running `/init` creates `skills/`, `models/`, `data/`, `migrations/`, `tests/`, `requirements.txt`.
+Workspace state: **Phase 9 complete + Coach agent integrated.** All 6 skills implemented and tested (38 tests + 1 slow perf test passing), production DuckDB holds 64 historical sessions, opencode Coach agent + 8 custom tools expose the system to the user via the CLI.
 
 ## Read order & precedence
 Read before writing any code or answering architecture questions:
 1. **SPEC.md** — DB schema, tech stack, skill inventory, project structure
 2. **MEMORY_PROTOCOL.md** — three-tier memory, state transitions, safety guards
 3. **AGENT_INSTRUCTIONS.md** — analysis protocols, communication style
+4. **`.opencode/agents/coach.md`** — the Coach agent's system prompt (inlines the core rules below)
 
 Conflict resolution: `SPEC.md > MEMORY_PROTOCOL.md > AGENT_INSTRUCTIONS.md`. Schema and safety always win.
 
@@ -19,15 +20,19 @@ duckdb==1.5.4 · polars==1.42.1 · lancedb==0.34.0 · pydantic==2.13.4 · alembi
 - Vectors: `data/lance_db/`
 - Migrations: `migrations/` (Alembic — never hand-edit schema)
 
+## Source of truth
+
+**The DuckDB file is canonical.** `log.md` is no longer used for live logging. The historical `log.md` was relocated to `docs/reference/sample_log.md` as a frozen historical reference; new sessions enter the system exclusively through the **Coach agent** (see `.opencode/agents/coach.md`) via the `coach_log_session` tool, or via `python scripts/ingest_log.py <file>` for one-shot bulk imports.
+
 ## Raw logging inputs (the only thing the user writes)
-The user logs **raw data with minimal effort**:
-- Gym sessions → `log.md` format, or future `session_logger` skill
-- Body weight
-- Calories
+The user logs **raw data with minimal effort** via natural language to the Coach agent (or a direct CLI call):
+- Gym sessions: "Log today: Squat 3x5 @ RPE 8" → Coach calls `coach_log_session`
+- Body weight *(planned, not implemented)*
+- Calories *(planned, not implemented)*
 
 Everything else (effective volume, recovery score, phase snapshots, trends, safety gating, weekly summaries, 1RM estimates, anomaly flags) is a **derived product of analysis skills over raw logs**. The user never does analysis themselves.
 
-`log.md` format gotchas (the raw source to ingest into DuckDB):
+Historical `log.md` format (preserved in `docs/reference/sample_log.md` for context):
 - Date: `MM/DD`
 - Weight: kg · `—` = unrecorded or bodyweight
 - RPE 1–10 · carried forward from prior set if blank

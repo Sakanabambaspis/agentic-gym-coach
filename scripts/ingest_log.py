@@ -185,9 +185,10 @@ def ingest(path: Path, dry_run: bool = False) -> int:
 def main(argv: list[str]) -> int:
     dry = "--dry-run" in argv
     reset = "--reset" in argv
-    path = _REPO_ROOT / "log.md"
+    pos = [a for a in argv if not a.startswith("--")]
+    path = (Path(pos[0]) if pos else _REPO_ROOT / "docs" / "reference" / "sample_log.md")
     if not path.exists():
-        print(f"log.md not found at {path}", file=sys.stderr)
+        print(f"log file not found at {path}", file=sys.stderr)
         return 1
     if reset and not dry:
         from skills.init import get_duckdb
@@ -201,9 +202,9 @@ def main(argv: list[str]) -> int:
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
 
-# ponytail: self-check — parses log.md deterministically.
+# ponytail: self-check — parses the sample log deterministically.
 def _demo():
-    n = ingest(_REPO_ROOT / "log.md", dry_run=True)
+    n = ingest(_REPO_ROOT / "docs" / "reference" / "sample_log.md", dry_run=True)
     assert n > 10, f"expected many sessions, got {n}"
     print(f"OK: parsed {n} sessions")
 
