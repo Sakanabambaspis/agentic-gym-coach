@@ -1,6 +1,6 @@
 """MCP server — exposes the coach tools over stdio for ANY MCP-capable runtime.
 
-Claude Code, ZCode, Cursor, Codex CLI, Continue, opencode, etc. attach this
+Claude Code, ZCode, Cursor, Codex CLI, Continue, etc. attach this
 one server instead of per-runtime tool glue. It wraps the SAME handlers as
 the CLI dispatcher (coach_tools.py) — change handlers there, never here.
 

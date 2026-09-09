@@ -1,13 +1,16 @@
 """sync_adapters — render the canonical coach prompt into runtime agent files.
 
 docs/COACH_PROMPT.md is the single source of the Coach persona. This script
-renders it (plus per-runtime frontmatter) into each adapter's agent file:
+renders it (plus per-runtime frontmatter) into each adapter's native agent
+file. The opencode adapter was removed (MCP is the tool surface now);
+ADAPTERS is therefore empty — this script is the extension point for the
+next native adapter:
 
-    .opencode/agents/coach.md   <- opencode native agent
+    ADAPTERS.append((FRONTMATTER, _REPO / ".claude" / "agents" / "coach.md"))
+    python scripts/sync_adapters.py
 
-Adding a runtime = add a (frontmatter, target_path) entry in ADAPTERS below,
-then run `python scripts/sync_adapters.py`. Use `--check` to verify rendered
-files are in sync (exits 1 on drift — run it after editing COACH_PROMPT.md).
+Use `--check` to verify rendered files are in sync (exits 1 on drift — run
+it after editing COACH_PROMPT.md when any adapter is registered).
 """
 
 from __future__ import annotations
@@ -18,41 +21,9 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parent.parent
 _PROMPT = _REPO / "docs" / "COACH_PROMPT.md"
 
-_OPENCODE_FRONTMATTER = """---
-description: Your personal gym coach — onboards goals, logs sessions, analyzes trends, plans training and nutrition from vendored professional knowledge, while respecting injuries. Switch to this agent with Tab to log sessions or ask training/nutrition questions.
-mode: primary
-permission:
-  edit: deny
-  bash: allow
-  read: allow
-  glob: allow
-  grep: allow
-  list: allow
-  skill: allow
-  task: allow
-  todowrite: allow
-  coach_log_session: allow
-  coach_safety_check: allow
-  coach_recovery: allow
-  coach_trend: allow
-  coach_snapshot: allow
-  coach_sessions: allow
-  coach_injuries_list: allow
-  coach_injuries_seed: allow
-  coach_ingest: allow
-  coach_profile_get: allow
-  coach_profile_set: allow
-  coach_memory_save: allow
-  coach_memory_search: allow
-  webfetch: deny
-  external_directory: deny
----
-
-"""
-
-ADAPTERS: list[tuple[str, Path]] = [
-    (_OPENCODE_FRONTMATTER, _REPO / ".opencode" / "agents" / "coach.md"),
-]
+# (frontmatter, target_path) per native runtime adapter. MCP-only runtimes
+# need no entry — they read COACH_PROMPT.md directly (see docs/adapters.md).
+ADAPTERS: list[tuple[str, Path]] = []
 
 
 def render() -> dict[Path, str]:

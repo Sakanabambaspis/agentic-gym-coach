@@ -1,6 +1,7 @@
 """Coach agent tool dispatcher.
 
-Invoked from opencode custom TS tools: `python coach_tools.py <cmd> <json>`.
+Invoked by the MCP server (mcp_server.py) or directly from the shell:
+`python coach_tools.py <cmd> <json>`.
 All output is JSON to stdout. Errors print {"error": ...} and exit 1.
 
 bash 0.5s budget per call. Skills are pure deterministic code.

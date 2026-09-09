@@ -1,10 +1,11 @@
 # Runtime Adapters — running the Coach anywhere
 
 The repo is the deployment unit. The Python core (`skills/`, `coach_tools.py`,
-DuckDB) is runtime-agnostic; every agent runtime attaches through one of the
-adapters below. The persona lives in **`docs/COACH_PROMPT.md`** (canonical) —
-never edit a rendered agent file directly; edit the prompt and run
-`python scripts/sync_adapters.py`.
+DuckDB) is runtime-agnostic; every agent runtime attaches through MCP (the
+primary surface) or the CLI. The persona lives in **`docs/COACH_PROMPT.md`**
+(canonical) — point your harness's agent at it. The former opencode native
+adapter (`.opencode/`, `opencode.json`) was removed; opencode-class runtimes
+attach like everything else, via MCP.
 
 ## One-time setup (all runtimes)
 
@@ -13,26 +14,16 @@ uv venv .venv && uv pip install -r requirements.txt
 alembic upgrade head        # bootstrap data/gym_coach.duckdb
 ```
 
-## opencode (native adapter, default)
-
-The Coach is the default primary agent on Tab: `.opencode/agents/coach.md`
-(rendered from COACH_PROMPT.md) + native TS tools in `.opencode/tools/`,
-allow-listed in `opencode.json`. After changing COACH_PROMPT.md:
-
-```bash
-python scripts/sync_adapters.py          # re-render; --check verifies drift
-```
-
-## Any MCP-capable runtime (Claude Code, ZCode, Cursor, Codex CLI, Continue, …)
+## MCP-capable runtimes (Claude Code, ZCode, Cursor, Codex CLI, Continue, …)
 
 `mcp_server.py` exposes all 12 coach tools + `coach_doctrine` (procedural
 disclosure over MCP) over stdio. All runtimes share this one server.
 
 **Claude Code** — repo-root `.mcp.json` is picked up automatically (or
-`claude mcp add gym-coach -- .venv/bin/python mcp_server.py`). Pair with the
-canonical prompt by pointing a Claude Code agent/subagent's system prompt at
-`docs/COACH_PROMPT.md`, or render an adapter entry in `scripts/sync_adapters.py`
-(`ADAPTERS` list) and re-run it.
+`claude mcp add gym-coach -- .venv/bin/python mcp_server.py`). For the
+persona, create a subagent (`.claude/agents/coach.md`) whose body is
+`docs/COACH_PROMPT.md` — or register it in `scripts/sync_adapters.py`'s
+`ADAPTERS` list and run the script to render it automatically.
 
 **ZCode** — add the server in your workspace MCP configuration pointing at
 `<repo>/.venv/bin/python mcp_server.py` (working directory = repo root), and
@@ -45,11 +36,18 @@ command `<repo>/.venv/bin/python`, args `["mcp_server.py"]`, cwd `<repo>`
 works. Use `coach_doctrine` with `topic="index"` when the runtime cannot read
 the repo's knowledge files directly.
 
-## Adding a new runtime
+## Any bash-capable agent, no MCP
 
-1. If it speaks MCP: configure it against `mcp_server.py` — done.
-2. If it needs a native agent file: add `(frontmatter, target_path)` to
-   `ADAPTERS` in `scripts/sync_adapters.py`, re-run it, and add the runtime's
-   tool wiring (or just its bash access to `coach_tools.py`).
-3. Both wrappers (CLI and MCP) dispatch through the same handlers in
-   `coach_tools.py` — change handlers there, never the wrappers.
+It can drive everything through `python coach_tools.py <cmd> '<json>'`
+(JSON to stdout; `{"error": ...}` + exit 1 on failure) once it reads
+`docs/COACH_PROMPT.md` for the workflow. You lose only the typed tool
+schemas.
+
+## Adding a native agent-file adapter
+
+If a runtime needs its own agent file rather than MCP config: add a
+`(frontmatter, target_path)` entry to `ADAPTERS` in
+`scripts/sync_adapters.py`, then run `python scripts/sync_adapters.py`
+(`--check` verifies drift after you edit COACH_PROMPT.md). Both wrappers
+(CLI and MCP) dispatch through the same handlers in `coach_tools.py` —
+change handlers there, never the wrappers.

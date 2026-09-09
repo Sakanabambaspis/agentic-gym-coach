@@ -34,13 +34,13 @@ You:  Remember I hate barbell rows.              → long-term memory (manual on
 - **It measures honestly.** Volume = effective hard sets (form-discounted,
   overlap-inclusive). 1RM estimates only from ~5RM-or-heavier sets. Missing
   data is stated, never fabricated.
-- **It works everywhere.** One Python core; opencode agent natively, every
-  MCP-capable runtime (Claude Code, ZCode, Cursor, Codex CLI, …) via
+- **It works everywhere.** One Python core; every MCP-capable runtime
+  (Claude Code, ZCode, Cursor, Codex CLI, …) attaches the same
   `mcp_server.py`.
 
 ## Stack
 
-Python 3.11+ · DuckDB · Polars · Pydantic V2 · Alembic · MCP · opencode (native adapter)
+Python 3.11+ · DuckDB · Polars · Pydantic V2 · Alembic · MCP
 
 ## One-time setup
 
@@ -52,8 +52,9 @@ python scripts/ingest_log.py --reset   # optional: import historical log.md
 
 ## Run the Coach
 
-- **opencode:** `opencode` (Coach is the default agent on Tab)
-- **Any MCP runtime:** point it at `.venv/bin/python mcp_server.py` — see [docs/adapters.md](docs/adapters.md)
+- **Any MCP runtime:** point it at `.venv/bin/python mcp_server.py` and use
+  [docs/COACH_PROMPT.md](docs/COACH_PROMPT.md) as the agent's system prompt —
+  see [docs/adapters.md](docs/adapters.md) for per-runtime wiring.
 
 ## Running tests
 
