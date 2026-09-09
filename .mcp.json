@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gym-coach": {
+      "command": ".venv/bin/python",
+      "args": ["mcp_server.py"],
+      "cwd": "."
+    }
+  }
+}

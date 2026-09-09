@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .enums import MuscleGroup, PhaseType
 
@@ -39,6 +39,19 @@ class ExerciseModel(BaseModel):
             if x is not None and x < 0:
                 raise ValueError("reps/rpe cannot be negative")
         return v
+
+    @model_validator(mode="after")
+    def _per_set_arrays_equal_length(self) -> "ExerciseModel":
+        # Analytics explode these arrays per set; mismatched lengths are a
+        # malformed log and must be rejected before the DB write (SPEC §1.3).
+        lengths = {len(x) for x in (self.reps, self.rpe, self.weight_kg) if x}
+        if len(lengths) > 1:
+            raise ValueError(
+                "reps/rpe/weight_kg are per-set arrays and must be equal length "
+                f"(got reps={len(self.reps)}, rpe={len(self.rpe)}, "
+                f"weight_kg={len(self.weight_kg)})"
+            )
+        return self
 
 
 class SessionModel(BaseModel):

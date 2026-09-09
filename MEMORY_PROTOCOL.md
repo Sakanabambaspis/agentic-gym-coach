@@ -26,7 +26,7 @@ Storage: DuckDB (metrics) + LanceDB (subjective notes with metadata).
 Retrieval Method: Hybrid search via skills. NEVER dump raw tables into context.
 Compression Protocol:
     Daily: Raw session logs stored as-is.
-    Weekly (Auto): generate_weekly_summary() skill aggregates daily logs into a single weekly_summaries record. Includes: effective volume per muscle group, avg RPE, pain incidents, key subjective themes, progress vs. target.
+    Weekly (Auto): planned weekly summary compression (aggregates daily logs into per-muscle effective hard sets, avg RPE, pain incidents, key subjective themes, progress vs. target). NOT YET IMPLEMENTED in v2 — the phase snapshot covers the 4-week view until it lands.
     Monthly: generate_phase_snapshot() creates anchor document. Weekly summaries older than 90 days are archived but remain queryable.
 Query Patterns:
     Quantitative: SQL/Polars via trend_analysis.py
@@ -34,40 +34,44 @@ Query Patterns:
     Hybrid: Combine both results in orchestrator before LLM reasoning
 
 Tier 3: Semantic Memory (Long-Term Identity & Knowledge)
-Scope: Permanent coaching knowledge, validated preferences, milestone archive.
-Storage: Curated LanceDB collection + phase_snapshots table.
-Write Policy: MANUAL APPROVAL REQUIRED. Agent proposes updates; user confirms via explicit command ("save to long-term memory"). Never auto-write.
+Scope: Goal definition, validated preferences, milestone archive.
+Storage (v2): DuckDB — `user_profiles` (validated, append-only UserProfile JSON; latest row = current) + `memory_notes` (freeform notes, substring/tag search). LanceDB semantic search is deferred to v3 (no offline embedder in deps); the protocol's intent is unchanged, only the storage engine.
+Write Policy: memory_notes — MANUAL APPROVAL REQUIRED ("save this" / "remember this"); never auto-write. user_profiles — written after the coach echoes the profile and the user confirms (onboarding or goal change); goal changes are audited to decision_log automatically.
 Contents:
-    Phenotype goal definition (薄肌 specialization priorities)
-    Validated exercise preferences ("chest-supported rows > barbell rows for my back")
+    Goal definitions (kind, physique_target, target muscles, metrics, deadlines)
+    Validated exercise preferences ("chest-supported rows > barbell rows")
     Injury history archive (resolved events with lessons learned)
-    Body composition milestones with photo references
-    Coaching philosophy alignment notes
-Retrieval Trigger: Phase transitions, program redesigns, meta-questions ("why do we prioritize rear delts?"), anomaly resolution requiring historical context.
+    Milestones and coaching observations
+Retrieval Trigger: Session start (profile drives priorities), phase transitions, program redesigns, meta-questions ("why do we prioritize X?"), anomaly resolution requiring historical context.
 
 STATE TRANSITION PROTOCOLS
 
 2.1 Session Start Sequence
 Pseudocode for orchestrator
 def initialize_session():
+    # 0. Onboarding gate — a coach without a profile asks, never assumes
+    profile = get_profile()          # None ⇒ flag onboarding_required
+
     # 1. Load Tier 1 working memory
     recovery = compute_recovery_score(today)
     injuries = get_active_injuries()
-    plan = get_todays_plan(phase=current_phase)
-    last_sessions = get_specialization_trend(priority_muscles, window=7)
-    
+    phase = get_current_phase()
+    priorities = derive_priority_muscles(profile)   # profile-driven, not hardcoded
+    last_sessions = {m: get_specialization_trend(m, window=14) for m in priorities}
+
     # 2. Inject into system prompt as structured block
     working_memory = WorkingMemoryState(
         recovery=recovery,
         injuries=injuries,
-        plan=plan,
-        recent_context=last_sessions
+        phase=phase,
+        onboarding_required=profile is None,
+        recent_trends=last_sessions
     )
-    
+
     # 3. Safety pre-check
     if recovery.score < 60 or injuries.active_count > 0:
         flag_autoregulation_required(working_memory)
-    
+
     return working_memory
 
 2.2 Session End Sequence

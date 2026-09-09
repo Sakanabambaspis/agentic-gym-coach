@@ -19,9 +19,9 @@ class TrendReport(BaseModel):
 
     muscle: MuscleGroup
     window_days: int
-    effective_volume: float = 0.0  # sets*reps*load, form-discounted
+    effective_volume: float = 0.0  # effective HARD SETS in window (form-discounted, overlap-inclusive)
     avg_rpe: float | None = None
-    est_1rm_kg: float | None = None
+    est_1rm_kg: float | None = None  # Epley from reps<=6 sets only (Training ch04)
     stalled: bool = False
     trend_direction: str = "unknown"  # 'up' | 'down' | 'plateau'
     sessions_in_window: int = 0
@@ -48,6 +48,8 @@ class PhaseSnapshot(BaseModel):
     tendon_status_summary: dict[str, Any] = Field(default_factory=dict)
     key_insight: str = ""
     next_phase_adjustment: str = ""
+    # computed, not persisted: input to the mandatory-deload floor (Training ch04)
+    block_state: dict[str, Any] = Field(default_factory=dict)
 
 
 class VisualDelta(BaseModel):

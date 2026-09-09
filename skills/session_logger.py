@@ -3,7 +3,7 @@
 Flow:
   1. Pydantic already validated `data` on construction (caller's job).
   2. Resolve `phase` if the user didn't set it (current phase from latest
-     snapshot; default to internship_maintenance when none exists) so the
+     snapshot; default to maintenance when none exists) so the
      user never has to tag a phase.
   3. Canonicalize each exercise: fill muscle_group from the catalog and
      store the canonical name (raw text survives in log.md).
@@ -22,8 +22,8 @@ from models import AnomalyFlag, ExerciseModel, LogConfirmation, PhaseType, Sessi
 from .init import get_duckdb
 
 # ponytail: baseline phase when none is known. Not a fabricated measurement —
-# it's the spec's maintenance phase, the safe default before any snapshot.
-_DEFAULT_PHASE = PhaseType.internship_maintenance
+# it's the goal-agnostic off-season phase, the safe default before any snapshot.
+_DEFAULT_PHASE = PhaseType.maintenance
 
 
 def _resolve_phase(data: SessionInput) -> PhaseType:

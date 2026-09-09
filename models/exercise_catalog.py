@@ -1,9 +1,13 @@
-"""Exercise catalog — alias → (canonical_name, muscle_group).
+"""Exercise catalog — alias → (canonical_name, muscle_group, secondaries).
 
-The user logs raw exercise strings (minimal effort). This module is the
-canonicalization layer: ingestion looks up every raw name here and writes
+The canonicalization layer: ingestion looks up every raw name here and writes
 the canonical name + muscle_group into DuckDB so trend_analysis groups
 cleanly without the user ever categorizing anything themselves.
+
+Secondaries implement Helms' overlap doctrine (Muscle & Strength Pyramid:
+Training ch03): primary AND secondary muscle contributions count 1:1 toward
+a muscle's weekly hard sets. trend_analysis credits them via
+SECONDARY_OVERLAP.
 
 Extensibility: unknown exercises fall back to keyword matching, are mapped
 best-effort, and flagged for review (returned via `canonicalize(...).needs_review`)
@@ -14,56 +18,83 @@ from __future__ import annotations
 
 from .enums import MuscleGroup
 
-# Each entry: (canonical_name, muscle_group, [aliases])
-_ENTRIES: list[tuple[str, MuscleGroup, list[str]]] = [
-    # Upper chest (specialization target)
+# Each entry: (canonical_name, muscle_group, [aliases], [secondary_muscles])
+_ENTRIES: list[tuple[str, MuscleGroup, list[str], list[MuscleGroup]]] = [
+    # Horizontal push — chest primary, triceps/delts secondary (ch03 table)
     ("Incline Bench Press", MuscleGroup.upper_chest,
-     ["Incline Press", "Machine Incline Press", "Dumbbell Incline Press", "Incline Dumbbell Press"]),
-    ("Decline Push-Up", MuscleGroup.upper_chest, []),  # mirrors press pattern
-    # Side delts (specialization target)
+     ["Incline Press", "Machine Incline Press", "Dumbbell Incline Press", "Incline Dumbbell Press"],
+     [MuscleGroup.triceps, MuscleGroup.side_delt]),
+    ("Decline Push-Up", MuscleGroup.upper_chest, [],
+     [MuscleGroup.triceps, MuscleGroup.side_delt]),
+    # Vertical push — delts primary (repo lumps delt heads), triceps secondary
     ("Shoulder Press", MuscleGroup.side_delt,
      ["Barbell Shoulder Press", "Machine Shoulder Press", "Dumbbell Shoulder Press",
-      "Strict Press", "Overhead Press"]),
+      "Strict Press", "Overhead Press"],
+     [MuscleGroup.triceps]),
     ("Lateral Raise", MuscleGroup.side_delt,
-     ["Cable Lateral Raise", "Machine Lateral Raise", "Dumbbell Lateral Raise"]),
-    # Rear delts (specialization target)
-    ("Reverse Fly", MuscleGroup.rear_delt, ["Machine Reverse Fly"]),
-    # Back / lats (detail)
-    ("Pull-Up", MuscleGroup.lats, ["Pull Up", "Close Grip Pull-Up"]),
-    ("Straight Arm Pulldown", MuscleGroup.lats, []),
+     ["Cable Lateral Raise", "Machine Lateral Raise", "Dumbbell Lateral Raise"], []),
+    ("Reverse Fly", MuscleGroup.rear_delt, ["Machine Reverse Fly"], []),
+    # Vertical pull — lats primary, rear delts + biceps secondary
+    ("Pull-Up", MuscleGroup.lats, ["Pull Up", "Close Grip Pull-Up"],
+     [MuscleGroup.rear_delt, MuscleGroup.biceps]),
+    ("Straight Arm Pulldown", MuscleGroup.lats, [], [MuscleGroup.triceps]),
+    # Horizontal pull — scapular retractors/lats primary, rear delts + biceps secondary
     ("Row", MuscleGroup.mid_back,
      ["Penlay Row", "Pendlay Row", "Cable Row", "Neutral Grip Cable Row",
       "Wide Grip Cable Row", "Wide Grip Row", "Machine Row",
-      "Reverse Row", "Wide Grip Reverse Row"]),
-    # Arms
-    ("Dip", MuscleGroup.triceps, []),
-    ("Overhead Tricep Extension", MuscleGroup.triceps, []),
-    ("Tricep Pushdown", MuscleGroup.triceps, []),
-    ("Skull Crusher", MuscleGroup.triceps, ["Dumbbell Skull Crusher"]),
-    ("Hammer Curl", MuscleGroup.biceps, []),
-    ("Bay Curl", MuscleGroup.biceps, []),
-    ("Dumbbell Curl", MuscleGroup.biceps, ["Curl"]),
-    # Quads
-    ("Squat", MuscleGroup.quads, ["Bulgarian Split Squat", "Split Squat"]),
-    ("Leg Extension", MuscleGroup.quads, []),
-    ("Leg Press", MuscleGroup.quads, []),
-    # Hamstrings / glutes
-    ("Romanian Deadlift", MuscleGroup.hamstrings, []),
-    ("Leg Curl", MuscleGroup.hamstrings, ["Single-Leg Curl"]),
-    # Calves
-    ("Calf Raise", MuscleGroup.calves, ["Smith Calf Raise"]),
-    # Core
-    ("Crunch", MuscleGroup.core, ["Machine Crunch"]),
-    ("Hanging Leg Raise", MuscleGroup.core, ["Leg Raise"]),
+      "Reverse Row", "Wide Grip Reverse Row"],
+     [MuscleGroup.lats, MuscleGroup.rear_delt, MuscleGroup.biceps]),
+    # Arms — isolation, no meaningful secondary
+    ("Dip", MuscleGroup.triceps, [],
+     [MuscleGroup.upper_chest, MuscleGroup.side_delt]),
+    ("Overhead Tricep Extension", MuscleGroup.triceps, [], []),
+    ("Tricep Pushdown", MuscleGroup.triceps, [], []),
+    ("Skull Crusher", MuscleGroup.triceps, ["Dumbbell Skull Crusher"], []),
+    ("Hammer Curl", MuscleGroup.biceps, [], []),
+    ("Bay Curl", MuscleGroup.biceps, [], []),
+    ("Dumbbell Curl", MuscleGroup.biceps, ["Curl"], []),
+    # Squat pattern — quads primary, glutes + erectors (≈core) secondary
+    ("Squat", MuscleGroup.quads, ["Bulgarian Split Squat", "Split Squat"],
+     [MuscleGroup.glutes, MuscleGroup.core]),
+    ("Leg Extension", MuscleGroup.quads, [], []),
+    ("Leg Press", MuscleGroup.quads, [], [MuscleGroup.glutes, MuscleGroup.core]),
+    # Hinge — hamstrings primary, glutes secondary
+    ("Romanian Deadlift", MuscleGroup.hamstrings, [], [MuscleGroup.glutes]),
+    ("Leg Curl", MuscleGroup.hamstrings, ["Single-Leg Curl"], []),
+    # Horizontal hip extension — glutes primary, hams secondary
+    ("Hip Thrust", MuscleGroup.glutes, ["Barbell Hip Thrust", "Glute Bridge", "Bridge"],
+     [MuscleGroup.hamstrings]),
+    ("Cable Kickback", MuscleGroup.glutes, ["Kickback"], []),
+    # Isolation
+    ("Calf Raise", MuscleGroup.calves, ["Smith Calf Raise"], []),
+    ("Crunch", MuscleGroup.core, ["Machine Crunch"], []),
+    ("Hanging Leg Raise", MuscleGroup.core, ["Leg Raise"], []),
 ]
 
 _ALIAS_TO_CANONICAL: dict[str, tuple[str, MuscleGroup]] = {}
-_canonical_names: set[str] = set()
-for _canon, _mg, _aliases in _ENTRIES:
+for _canon, _mg, _aliases, _secondaries in _ENTRIES:
     _ALIAS_TO_CANONICAL[_canon] = (_canon, _mg)
-    _canonical_names.add(_canon)
     for _a in _aliases:
         _ALIAS_TO_CANONICAL[_a] = (_canon, _mg)
+
+# Helms ch03 overlap doctrine: an exercise's sets count 1:1 toward its
+# SECONDARY muscles as well as its primary. Analytics-only — the sessions
+# table keeps storing the single primary group.
+SECONDARY_OVERLAP: dict[str, list[MuscleGroup]] = {
+    _canon: _secondaries for _canon, _mg, _aliases, _secondaries in _ENTRIES
+}
+
+
+# Reverse map: muscle → canonical exercise names that credit it secondarily.
+_SECONDARY_NAMES: dict[MuscleGroup, list[str]] = {}
+for _canon, _secondaries in SECONDARY_OVERLAP.items():
+    for _m in _secondaries:
+        _SECONDARY_NAMES.setdefault(_m, []).append(_canon)
+
+
+def secondary_exercises(muscle: MuscleGroup) -> list[str]:
+    """Canonical names whose sets also count toward `muscle` (overlap)."""
+    return _SECONDARY_NAMES.get(muscle, [])
 
 
 # ponytail: keyword fallback for unseen exercises. Extend the keyword lists
@@ -86,6 +117,9 @@ _KEYWORD_RULES: list[tuple[str, MuscleGroup]] = [
     ("split", MuscleGroup.quads),
     ("deadlift", MuscleGroup.hamstrings),
     ("leg curl", MuscleGroup.hamstrings),
+    ("hip thrust", MuscleGroup.glutes),
+    ("glute", MuscleGroup.glutes),
+    ("kickback", MuscleGroup.glutes),
     ("calf", MuscleGroup.calves),
     ("crunch", MuscleGroup.core),
     ("leg raise", MuscleGroup.core),

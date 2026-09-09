@@ -1,75 +1,66 @@
-# AGENTS.md — THIN_MUSCLE_OS
+# AGENTS.md — Agentic Gym Coach (v2)
 
-Workspace state: **Phase 9 complete + Coach agent integrated.** All 6 skills implemented and tested (38 tests + 1 slow perf test passing), production DuckDB holds 64 historical sessions, opencode Coach agent + 8 custom tools expose the system to the user via the CLI.
+Workspace state: **v2 complete.** General-purpose coach: dual Helms skills vendored as the only doctrine, user-profile + memory layer (migration 0002), volume currency switched to effective hard sets with overlap, deterministic safety layer retained, tool surface exposed via CLI + MCP (12 tools + doctrine router). 56 tests + 1 slow perf guard passing.
 
 ## Read order & precedence
 Read before writing any code or answering architecture questions:
-1. **SPEC.md** — DB schema, tech stack, skill inventory, project structure
+1. **SPEC.md** — v2 schema, skill inventory, surfaces, invariants
 2. **MEMORY_PROTOCOL.md** — three-tier memory, state transitions, safety guards
-3. **AGENT_INSTRUCTIONS.md** — analysis protocols, communication style
-4. **`.opencode/agents/coach.md`** — the Coach agent's system prompt (inlines the core rules below)
+3. **`docs/COACH_PROMPT.md`** — the canonical Coach persona (rendered into runtime agent files)
+4. **`docs/adapters.md`** — how runtimes attach (opencode native, MCP for everything else)
 
-Conflict resolution: `SPEC.md > MEMORY_PROTOCOL.md > AGENT_INSTRUCTIONS.md`. Schema and safety always win.
+Conflict resolution: **safety layer > vendored skills (`docs/knowledge/helms-*`) > mechanics docs.** v1 knowledge documents were removed as unsourced — never resurrect their doctrine; extend knowledge by vendoring a book-skill, not by hand-writing physiology.
 
 ## Tech stack (pinned in requirements.txt)
-duckdb==1.5.4 · polars==1.42.1 · lancedb==0.34.0 · pydantic==2.13.4 · alembic==1.18.5 · pytest==9.1.1 · plotly==6.8.0 · Python 3.11+
-
-> Pins bumped from SPEC defaults to Python-3.14-compatible versions (original pins had no cp314 wheels). SPEC pin list is superseded by requirements.txt.
+duckdb · polars · lancedb · pydantic · alembic · duckdb-engine · pytest · plotly · pytz (DuckDB TIMESTAMPTZ conversion) · mcp (stdio server) · Python 3.11+
 
 - OLAP: `data/gym_coach.duckdb` (persistent file mode)
-- Vectors: `data/lance_db/`
+- Vectors: `data/lance_db/` (deferred — Tier 3 uses DuckDB tables in v2)
 - Migrations: `migrations/` (Alembic — never hand-edit schema)
 
 ## Source of truth
-
-**The DuckDB file is canonical.** `log.md` is no longer used for live logging. The historical `log.md` was relocated to `docs/reference/sample_log.md` as a frozen historical reference; new sessions enter the system exclusively through the **Coach agent** (see `.opencode/agents/coach.md`) via the `coach_log_session` tool, or via `python scripts/ingest_log.py <file>` for one-shot bulk imports.
-
-## Raw logging inputs (the only thing the user writes)
-The user logs **raw data with minimal effort** via natural language to the Coach agent (or a direct CLI call):
-- Gym sessions: "Log today: Squat 3x5 @ RPE 8" → Coach calls `coach_log_session`
-- Body weight *(planned, not implemented)*
-- Calories *(planned, not implemented)*
-
-Everything else (effective volume, recovery score, phase snapshots, trends, safety gating, weekly summaries, 1RM estimates, anomaly flags) is a **derived product of analysis skills over raw logs**. The user never does analysis themselves.
-
-Historical `log.md` format (preserved in `docs/reference/sample_log.md` for context):
-- Date: `MM/DD`
-- Weight: kg · `—` = unrecorded or bodyweight
-- RPE 1–10 · carried forward from prior set if blank
-- Notes: free text (injury, deload, descending load, bodyweight, etc.)
+**The DuckDB file is canonical.** New sessions enter via the Coach (`coach_log_session`) or `python scripts/ingest_log.py <file>` for one-shot bulk imports. The user writes only raw logs ("Squat 3x5 @ RPE 8"); everything else is derived.
 
 ## Commands
-| Command | Action |
-|---|---|
-| `/init` | Scaffold dirs, install deps, init Alembic, bootstrap DB, generate skill stubs + tests |
-| `/implement <skill>` | Implement skill + unit tests + verify perf target |
-| `/test <skill>` | Run unit tests, report coverage |
-| `/migrate <desc>` | Generate + apply Alembic migration |
-| `/snapshot` | Trigger phase snapshot generation |
-| `/calibrate` | Monthly calibration check |
-| `/status` | DB size, skill impl progress, last snapshot, active injuries |
-| `/help` | List commands + impl progress |
+```bash
+python -m pytest -q                     # full suite (~3s); pytest.ini addopts already skip -m slow
+python -m pytest -m slow -q             # 10K-row perf guard (run separately)
+python scripts/ingest_log.py --dry-run [file]   # parse a log.md, no DB writes
+python scripts/ingest_log.py --reset [file]     # ⚠ DELETE FROM sessions first, then re-ingest
+python coach_tools.py                   # dispatcher — prints available subcommands (12)
+alembic upgrade head                    # apply migrations (bootstrap a fresh DB this way)
+python scripts/sync_adapters.py         # render COACH_PROMPT.md → runtime agent files (--check for drift)
+python mcp_server.py                    # MCP stdio server (12 tools + coach_doctrine)
+opencode                                # launch the Coach agent (default on Tab)
+```
+
+No lint/typecheck config exists in this repo — don't invoke tools that aren't set up.
 
 ## Modularity & maintainability
-- **Skills are standalone, deterministic Python modules** in `skills/`. Each returns Pydantic models (not dicts). No LLM logic lives here — reasoning happens in the orchestrator.
-- Adding/changing a skill → add a module + `tests/test_skills/test_<name>.py`. Pydantic return types enforce the caller contract, so swapping implementations doesn't break callers.
-- New analysis scripts/CLIs → drop into `skills/` (if called by the LLM) or a top-level script (if standalone). Keep a single skill = a single file, one public function.
-- `models/` holds all Pydantic schemas separately so skills share types without coupling.
+- **Skills are standalone, deterministic Python modules** in `skills/`. Each returns Pydantic models (not dicts). No LLM logic lives here — reasoning happens in the orchestrator/agent.
+- Adding/changing a skill → add a module + `tests/test_skills/test_<name>.py`.
+- `models/` holds all Pydantic schemas. `models/enums.py` is the controlled vocabulary — DB columns store VARCHAR, Pydantic enforces (extending a vocabulary needs no migration).
+- **Adding a coach tool touches four places:** a handler in `coach_tools.py` (DISPATCH), an MCP wrapper in `mcp_server.py`, optionally a `.opencode/tools/coach_*.ts` adapter + `opencode.json` allow entry, and a line in `docs/COACH_PROMPT.md`.
 - Schema changes go through Alembic migrations only — never hand-edit `data/gym_coach.duckdb`.
+
+## Dev gotchas
+- **Tests never touch production data.** `conftest.py` points `GYM_COACH_DUCKDB`/`GYM_COACH_LANCE` at throwaway files in `/tmp` and wipes tables around every test. Those env vars redirect the DB anywhere — but paths are read at `skills.init` import time, so set them before the first import.
+- **Single-process pytest only** — pytest-xdist workers collide on the shared temp DB file.
+- **Coach tool layering:** opencode TS tool (`.opencode/tools/coach_*.ts`) AND `mcp_server.py` both wrap the same handlers in `coach_tools.py` (JSON to stdout; `{"error": ...}` + exit 1 on failure) → skill in `skills/`. Change handlers, never the wrappers.
+- **Edit the persona in `docs/COACH_PROMPT.md` only**, then `python scripts/sync_adapters.py`. Never edit `.opencode/agents/coach.md` directly — it's rendered.
+- **The Coach agent must not edit code** — `docs/COACH_PROMPT.md` restricts it to `coach_*` tools + read/grep/glob. Code changes are the coding agent's job.
+- **pytz is required at runtime** for DuckDB TIMESTAMPTZ → Python conversion (memory/profile RETURNING paths).
 
 ## Repo-specific constraints (differ from defaults)
 - **Polars, never Pandas** — strict.
-- **Pydantic V2** validates all inputs/outputs at DuckDB boundaries.
-- **`form_quality < 3`** → that set's volume is discounted 50% in all analytics (SPEC §1.3).
-- **`pain_flag = true`** → immediate warning + session tagged for review.
-- **Always query `injury_status`** — never assume tendon state.
+- **Pydantic V2** validates all inputs/outputs at DuckDB boundaries; per-set arrays (reps/rpe/weight_kg) must be equal length (enforced by validator).
+- **Volume currency = effective hard sets** (form_quality < 3 ⇒ 50% discount; primary + secondary 1:1 via `SECONDARY_OVERLAP`; bodyweight sets count). Tonnage is detail-only. est_1RM from reps ≤ 6 sets only.
 - **`safety_gate.check_exercise_safety()` is deterministic** — if it returns unsafe, never suggest that exercise; offer `SafetyResult` alternatives instead.
 - **No LLM reasoning inside `skills/`** — skills are pure code.
-- **Tier 3 semantic memory writes require explicit user command** ("save to long-term memory"). Never auto-write. Tier 1/2 may auto-write.
-- **Vector DB stores paths + metadata**, never raw image blobs.
-- **Tier 1 working memory < 3K tokens** — orchestrator hard limit.
+- **Tier 3 memory writes require explicit user command** ("save this"). Never auto-write. Profiles may be written after user confirmation (echo + confirm).
 - **Cite retrieved values explicitly** — never paraphrase from memory. If retrieval returns null, say "I don't have that data." Do not guess.
-- **Log every plan modification** to the decision audit trail: trigger signal, reasoning chain, alternative rejected, future validation tag.
+- **Log every plan modification** (incl. goal changes — automatic in `skills/profile.py`) to the decision audit trail.
+- **Doctrine questions route through the vendored skills** (`docs/knowledge/helms-*/SKILL.md`) — at most one knowledge file per turn.
 
 ## Error posture
 - Halt on failure. Report exact failure point + affected data + recovery options. Log to audit trail as `system_error`.
@@ -79,6 +70,6 @@ Historical `log.md` format (preserved in `docs/reference/sample_log.md` for cont
 - [ ] DuckDB queries <100ms on 10K-row synthetic set
 - [ ] `check_exercise_safety()` blocks contraindicated exercises deterministically
 - [ ] Pydantic rejects malformed session logs before DB write
-- [ ] Unit tests cover edge cases: empty arrays, null RPE, pain during exercise
+- [ ] Unit tests cover edge cases: empty arrays, null RPE, pain during exercise, empty profile
 - [ ] Phase snapshot generates without manual intervention
 - [ ] Full offline operation (no cloud except optional vision API for `visual_delta`)

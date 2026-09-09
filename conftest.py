@@ -48,9 +48,13 @@ def _clean_tables():
     d.execute("DELETE FROM injury_status")
     d.execute("DELETE FROM decision_log")
     d.execute("DELETE FROM phase_snapshots")
+    d.execute("DELETE FROM user_profiles")
+    d.execute("DELETE FROM memory_notes")
     yield
     d = get_duckdb()
     d.execute("DELETE FROM sessions")
     d.execute("DELETE FROM injury_status")
     d.execute("DELETE FROM decision_log")
     d.execute("DELETE FROM phase_snapshots")
+    d.execute("DELETE FROM user_profiles")
+    d.execute("DELETE FROM memory_notes")

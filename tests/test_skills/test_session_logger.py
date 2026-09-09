@@ -57,7 +57,7 @@ def test_phase_defaults_to_maintenance_when_unspecified():
     inp = SessionInput(date=date(2025, 1, 1), exercises=[_ex("Squat", [8], [8])])
     log_session(inp)
     phase = get_duckdb().execute("SELECT phase FROM sessions").fetchone()[0]
-    assert phase == "internship_maintenance"
+    assert phase == "maintenance"
 
 
 def test_phase_from_input_is_respected():

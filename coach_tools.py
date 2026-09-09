@@ -95,6 +95,40 @@ def cmd_injuries_seed(args: dict):
     return {"ok": True, "message": f"seeded {args['location']}={args['status']}"}
 
 
+def cmd_profile_get(args: dict):
+    from skills.profile import get_profile
+    p = get_profile()
+    return p.model_dump(mode="json") if p else {"profile": None}
+
+
+def cmd_profile_set(args: dict):
+    from models import UserProfile
+    from skills.profile import set_profile
+    p = set_profile(UserProfile.model_validate(args))
+    return p.model_dump(mode="json")
+
+
+def cmd_memory_save(args: dict):
+    from models import NoteKind
+    from skills.memory import add_note
+    note = add_note(
+        args["text"],
+        kind=NoteKind(args.get("kind", "observation")),
+        tags=args.get("tags", []),
+    )
+    return note.model_dump(mode="json")
+
+
+def cmd_memory_search(args: dict):
+    from skills.memory import search_notes
+    notes = search_notes(
+        query=args.get("query"),
+        tags=args.get("tags"),
+        limit=int(args.get("limit", 20)),
+    )
+    return [n.model_dump(mode="json") for n in notes]
+
+
 DISPATCH = {
     "log_session": cmd_log_session,
     "safety_check": cmd_safety_check,
@@ -104,6 +138,10 @@ DISPATCH = {
     "sessions": cmd_sessions,
     "injuries_list": cmd_injuries_list,
     "injuries_seed": cmd_injuries_seed,
+    "profile_get": cmd_profile_get,
+    "profile_set": cmd_profile_set,
+    "memory_save": cmd_memory_save,
+    "memory_search": cmd_memory_search,
 }
 
 

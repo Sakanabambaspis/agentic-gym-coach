@@ -15,20 +15,17 @@ from __future__ import annotations
 from datetime import date
 
 from models import (
-    InjuryState, MuscleGroup, PainLocation, PhaseType, SessionInput,
+    InjuryState, PainLocation, PhaseType, SessionInput,
     WorkingMemoryState,
 )
 from models.injury import InjuryStatus
 from skills.init import get_duckdb
+from skills.profile import derive_priority_muscles, get_profile
 from skills.recovery import compute_recovery_score
 from skills.session_logger import log_session
 from skills.trend_analysis import get_specialization_trend
 
 _TIER1_LIMIT_TOKENS = 3000
-_PRIORITY_MUSCLES = [
-    MuscleGroup.side_delt, MuscleGroup.rear_delt, MuscleGroup.upper_chest,
-    MuscleGroup.lats, MuscleGroup.mid_back,
-]
 
 _current_wm: WorkingMemoryState | None = None
 
@@ -65,11 +62,14 @@ def initialize_session(today: date | None = None) -> WorkingMemoryState:
     recovery = compute_recovery_score(today)
     injuries = _active_injuries()
     phase = _current_phase()
-    recent = {m: get_specialization_trend(m, window_days=14) for m in _PRIORITY_MUSCLES}
+    profile = get_profile()
+    priorities = derive_priority_muscles(profile)
+    recent = {m: get_specialization_trend(m, window_days=14) for m in priorities}
     autoreg = recovery.score < 60 or len(injuries) > 0
     wm = WorkingMemoryState(
         date=today, recovery=recovery, active_injuries=injuries,
-        phase=phase, autoregulation_required=autoreg, recent_trends=recent,
+        phase=phase, autoregulation_required=autoreg,
+        onboarding_required=profile is None, recent_trends=recent,
     )
     global _current_wm
     _current_wm = wm

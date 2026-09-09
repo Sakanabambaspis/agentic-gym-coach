@@ -1,13 +1,21 @@
 """snapshot — compress last 4 weeks into a phase anchor document.
 
-Builds a PhaseSnapshot from recent sessions + injury_status and persists a
-phase_snapshots row (upsert by snapshot_date). Specialty 1RMs come from
-Epley over the last 28 days. body_weight_kg / waist_cm are None until a daily
-logging path exists — honest "I don't have that data" per AGENTS.md.
+Builds a PhaseSnapshot from recent sessions + injury_status + user profile
+and persists a phase_snapshots row (upsert by snapshot_date). Specialty 1RMs
+come from Epley over qualifying sets only (reps <= 6 — "~5RM or heavier",
+Training ch04). Volume is effective hard sets, overlap-inclusive, via
+trend_analysis.hard_sets_by_muscle (single shared definition).
+
+`block_state` is COMPUTED, NOT PERSISTED: weeks/blocks since the last
+deload-phase session — input to the mandatory-deload floor ("deload by the
+3rd mesocycle regardless", Training ch04). body_weight_kg / waist_cm are
+None until a daily logging path exists — honest "I don't have that data".
+
+Insight targets come from the user profile's priority muscles; no profile ⇒
+the snapshot says so instead of inventing targets.
 
 This skill PROPOSES (never auto-writes) Tier 3 semantic-memory updates; it
-only persists the phase_snapshots row. The orchestrator asks the user for
-explicit approval before any Tier 3 write.
+only persists the phase_snapshots row.
 
 Contract: <200ms. Aggregated metrics must match recomputed values within 5%.
 """
@@ -22,6 +30,8 @@ import polars as pl
 from models import PhaseSnapshot
 
 from .init import get_duckdb
+from .profile import derive_priority_muscles, get_profile
+from .trend_analysis import _EPLEY_MAX_REPS, hard_sets_by_muscle
 
 # Representative lifts / muscle: {canonical_exercise: muscle_label}
 REPRESENTATIVE_LIFTS = [
@@ -51,7 +61,10 @@ def _specialization_1rms(sets_df: pl.DataFrame) -> dict[str, float]:
         return {}
     per_set = sets_df.explode(["reps", "rpe", "weight_kg"])
     per_set = per_set.with_columns(
-        pl.when(pl.col("weight_kg").is_not_null() & pl.col("reps").is_not_null())
+        pl.when(
+            pl.col("weight_kg").is_not_null() & pl.col("reps").is_not_null()
+            & (pl.col("reps") <= _EPLEY_MAX_REPS)
+        )
         .then(pl.col("weight_kg") * (1.0 + pl.col("reps") / 30.0))
         .alias("est_1rm")
     )
@@ -82,32 +95,41 @@ def _tendon_summary() -> dict[str, Any]:
     return {loc: {"status": st, "severity": sev} for loc, st, sev in rows}
 
 
-def _volume_by_muscle(sets_df: pl.DataFrame) -> dict[str, int]:
-    if sets_df.height == 0:
-        return {}
-    sql = """
-        SELECT mg, count(*) AS sets FROM (
-            SELECT UNNEST(s.exercises).sets AS st,
-                   UNNEST(s.exercises).muscle_group AS mg
-            FROM sessions s WHERE s.date BETWEEN ? AND ?
-        ) GROUP BY mg
-    """
-    rows = get_duckdb().execute(sql, [date.today() - timedelta(days=_WINDOW_DAYS), date.today()]).fetchall()
-    return {r[0]: int(r[1]) for r in rows}
+def _block_state(today: date) -> dict[str, Any]:
+    # Mandatory-deload floor input (Training ch04): time since last deload.
+    row = get_duckdb().execute(
+        "SELECT MAX(date) FROM sessions WHERE phase = 'deload'"
+    ).fetchone()
+    last = row[0] if row else None
+    if last is None:
+        return {"weeks_since_deload": None, "blocks_since_deload": None}
+    weeks = (today - last).days / 7.0
+    return {"weeks_since_deload": round(weeks, 1), "blocks_since_deload": int(weeks // 4)}
 
 
-def _insight(vol_by_muscle: dict[str, int]) -> tuple[str, str]:
+def _insight(vol_by_muscle: dict[str, float]) -> tuple[str, str]:
     # ponytail: templated deterministic insight — NOT LLM prose. The orchestrator
-    # expands with citations. Highlights the under-trained specialization target.
-    targets = ["side_delt", "rear_delt", "upper_chest", "lats", "mid_back"]
-    min_muscle = min(targets, key=lambda m: vol_by_muscle.get(m, 0))
-    min_sets = vol_by_muscle.get(min_muscle, 0)
+    # expands with citations. Targets come from the profile, never hardcoded.
+    profile = get_profile()
+    if profile is None:
+        return (
+            "no user profile set — priorities unknown",
+            "run onboarding and set goals via coach_profile_set",
+        )
+    targets = [m.value for m in derive_priority_muscles(profile)]
+    if not targets:
+        return (
+            "profile has no priority muscles — balanced full-body programming",
+            "declare goal target muscles or priority_muscles to enable targeting",
+        )
+    min_muscle = min(targets, key=lambda m: vol_by_muscle.get(m, 0.0))
+    min_sets = vol_by_muscle.get(min_muscle, 0.0)
     if min_sets == 0:
-        insight = f"no direct work logged for specialization target {min_muscle} in last 4w"
-        adjust = f"add at least one {min_muscle} session per week"
+        insight = f"no work logged for priority target {min_muscle} in last 4w"
+        adjust = f"program at least one weekly session targeting {min_muscle}"
     else:
-        insight = f"{min_muscle} is the lowest-volume specialization target ({min_sets} sets/28d)"
-        adjust = f"add one weekly session targeting {min_muscle}"
+        insight = f"{min_muscle} is the lowest-volume priority target ({min_sets:g} hard sets/4w)"
+        adjust = f"consider one more weekly session targeting {min_muscle} (Training ch03: add 1-2 sets only if plateaued AND recovering)"
     return insight, adjust
 
 
@@ -117,7 +139,7 @@ def generate_phase_snapshot() -> PhaseSnapshot:
     sets_df = _fetch_all_sets(start, today)
 
     spec_lifts = _specialization_1rms(sets_df)
-    vol = _volume_by_muscle(sets_df)
+    vol = hard_sets_by_muscle(start, today)
     insight, adjust = _insight(vol)
     snap = PhaseSnapshot(
         snapshot_date=today,
@@ -128,6 +150,7 @@ def generate_phase_snapshot() -> PhaseSnapshot:
         tendon_status_summary=_tendon_summary(),
         key_insight=insight,
         next_phase_adjustment=adjust,
+        block_state=_block_state(today),
     )
 
     d = get_duckdb()

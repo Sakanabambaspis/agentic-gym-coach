@@ -1,6 +1,11 @@
-"""Controlled vocabularies — mirror DuckDB ENUM types (SPEC §1.2).
+"""Controlled vocabularies — validated at the Pydantic boundary.
 
-Keep values lowercase snake_case; they map 1:1 to the SQL ENUM labels.
+v2: the DB stores phase/location as VARCHAR (migration 0002); these enums are
+the single source of the allowed vocabulary. Extending a vocabulary no longer
+requires a migration — add a value here and the validation layer enforces it.
+
+Phase names follow Helms' block-periodization vocabulary (Muscle & Strength
+Pyramid: Training ch04) so program state maps 1:1 onto the doctrine.
 """
 
 from enum import Enum
@@ -23,12 +28,14 @@ class MuscleGroup(str, Enum):
 
 
 class PhaseType(str, Enum):
-    internship_maintenance = "internship_maintenance"
-    bridge_reconditioning = "bridge_reconditioning"
-    specialization_lean_bulk = "specialization_lean_bulk"
-    diet_break = "diet_break"
-    mini_cut = "mini_cut"
-    deload = "deload"
+    maintenance = "maintenance"            # off-season / no specific push
+    reconditioning = "reconditioning"      # return from layoff or into base work
+    accumulation = "accumulation"          # volume block (sets up, RPE 5–8)
+    intensification = "intensification"    # load/RPE climb (sets down)
+    realization = "realization"            # taper / test / display fitness
+    deload = "deload"                      # planned low-stress week
+    cut = "cut"                            # fat-loss phase (training + diet)
+    lean_bulk = "lean_bulk"                # gaining phase (training + diet)
 
 
 class PainLocation(str, Enum):
@@ -36,6 +43,10 @@ class PainLocation(str, Enum):
     right_elbow = "right_elbow"
     left_knee = "left_knee"
     right_knee = "right_knee"
+    left_shoulder = "left_shoulder"
+    right_shoulder = "right_shoulder"
+    left_hip = "left_hip"
+    right_hip = "right_hip"
     lower_back = "lower_back"
     none = "none"
 

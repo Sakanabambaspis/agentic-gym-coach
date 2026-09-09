@@ -15,6 +15,19 @@ def test_initialize_session_loads_tier1_under_token_limit():
     assert wm.active_injuries == []  # none seeded
     assert wm.autoregulation_required in (True, False)
     assert wm.estimate_tokens() < 3000
+    assert wm.onboarding_required is True  # no profile yet
+    assert wm.recent_trends == {}  # no priorities without a profile
+
+
+def test_initialize_session_uses_profile_priorities():
+    from models import Goal, GoalKind, MuscleGroup, UserProfile
+    from skills.profile import set_profile
+    set_profile(UserProfile(goals=[
+        Goal(kind=GoalKind.hypertrophy, target_muscles=[MuscleGroup.side_delt]),
+    ]))
+    wm = orchestrator.initialize_session(today=date(2025, 7, 8))
+    assert wm.onboarding_required is False
+    assert list(wm.recent_trends.keys()) == [MuscleGroup.side_delt]
 
 
 def test_finalize_session_persists_and_clears_wm():

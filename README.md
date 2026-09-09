@@ -1,72 +1,71 @@
-# THIN_MUSCLE_OS — Agentic Gym Coach
+# Agentic Gym Coach
 
-Local-first fitness coach for the lean-muscle physique (薄肌). Chat with it like a real coach — it knows your logs, respects your tendinopathy, and never forgets your priorities.
+A general-purpose, local-first gym coach you talk to like a real one. It
+onboards your goals, remembers your profile, logs your sessions, gates every
+exercise suggestion against your injuries, and answers training + nutrition
+questions from vendored professional sources — never invented science.
 
-```bash
-cd agentic_gym_coach
-opencode          # launches the Coach — default agent on Tab
-```
+**First conversation (onboarding):** it asks your goals (hypertrophy,
+strength, fat loss, …), physique target (ripped / athletic / bulky), training
+age, schedule, equipment, and injuries — then coaches toward YOUR profile.
 
-**Log sessions in plain language:**
-```
-Log today: Incline Bench 3x8 @ RPE 8, Lateral Raise 4x12 @ RPE 9, Pull-Up 3x6
-```
+```text
+You:  I want to put size on my side delts. 4 days a week, commercial gym.
+Coach: <onboards profile> → builds a program from the training pyramid,
+       volume matched to your training age, 2×/week delts.
 
-**Ask anything:**
+You:  Log today: Incline Bench 3x8 @ RPE 8, Lateral Raise 4x12 @ RPE 9
+You:  Should I do skull crushers tonight?        → deterministic safety gate
+You:  How many calories to get ripped?           → nutrition pyramid ch02
+You:  My bench is stuck.                         → plateau flowchart, free wins first
+You:  Remember I hate barbell rows.              → long-term memory (manual only)
 ```
-How's my rear delt doing?                 → trend analysis
-Should I do Skull Crushers tonight?       → safety gate (deterministic)
-Plan a 4-week side-delt block.            → phase planning with knowledge docs
-What's my recovery looking like?          → recovery score
-```
-
-The Coach reads your session history, checks your active injuries, applies physiological rules, and proposes plans — all through conversation. No dashboards to click. No forms to fill.
 
 ## How it works
 
-- **You talk.** The Coach runs on opencode — the same CLI you already have.
-- **It remembers.** Every session is validated by Pydantic and persisted to DuckDB.
-- **It verifies.** `coach_safety_check` cross-references `injury_status` before suggesting any exercise. Deterministic — never suggests a contraindicated movement.
-- **It analyzes.** Effective volume (form_quality < 3 discounted 50%), Epley 1RM, stall detection, recovery heuristics. All derived from raw logs, all pure Python.
-- **It plans.** 薄肌 specialization methodology inlined: upper chest → side delts → rear delts → back detail, with realistic volume landmarks and RPE autoregulation.
+- **Doctrine from books, not vibes.** Two vendored skills — *Muscle & Strength
+  Pyramid: Training* (2nd ed.) and *Muscle & Strength Nutrition Pyramid* — are
+  the only professional knowledge, loaded on demand (procedural disclosure).
+- **You are data.** Goals, training age, schedule, priorities, injuries, and
+  memory notes live in DuckDB as validated, versioned records — the coach
+  never hardcodes who you are. Goal changes are audited.
+- **It verifies.** `coach_safety_check` cross-references `injury_status`
+  before any exercise suggestion. Deterministic — no negotiation.
+- **It measures honestly.** Volume = effective hard sets (form-discounted,
+  overlap-inclusive). 1RM estimates only from ~5RM-or-heavier sets. Missing
+  data is stated, never fabricated.
+- **It works everywhere.** One Python core; opencode agent natively, every
+  MCP-capable runtime (Claude Code, ZCode, Cursor, Codex CLI, …) via
+  `mcp_server.py`.
 
 ## Stack
 
-Python 3.11+ · DuckDB · Polars · Pydantic V2 · Alembic · opencode (agent runtime)
-
-## Files you should know
-
-| What | Where |
-|---|---|
-| Coach agent | `.opencode/agents/coach.md` |
-| Custom tools | `.opencode/tools/coach_*.ts` |
-| Dispatcher | `coach_tools.py` |
-| Gym knowledge | `docs/knowledge/*.md` |
-| 6 analysis skills | `skills/{session_logger,safety_gate,recovery,trend_analysis,snapshot,visual_delta}.py` |
-| Pydantic models | `models/` |
-| DuckDB schema | `migrations/` (Alembic) |
-| Frozen historical log | `docs/reference/sample_log.md` |
+Python 3.11+ · DuckDB · Polars · Pydantic V2 · Alembic · MCP · opencode (native adapter)
 
 ## One-time setup
 
 ```bash
-pip install -r requirements.txt
-python scripts/ingest_log.py --reset          # import 64 historical sessions
-opencode                                       # start chatting with Coach
+uv venv .venv && uv pip install -r requirements.txt
+alembic upgrade head      # bootstrap data/gym_coach.duckdb
+python scripts/ingest_log.py --reset   # optional: import historical log.md
 ```
+
+## Run the Coach
+
+- **opencode:** `opencode` (Coach is the default agent on Tab)
+- **Any MCP runtime:** point it at `.venv/bin/python mcp_server.py` — see [docs/adapters.md](docs/adapters.md)
 
 ## Running tests
 
 ```bash
-python -m pytest -q                            # 38 tests, ~6s
-python -m pytest -m slow -q                    # perf guard on 10K rows
+python -m pytest -q          # 56 tests, ~3s
+python -m pytest -m slow -q  # perf guard on 10K rows
 ```
 
 ## Design principles
 
 - Skills are pure deterministic code — zero LLM logic inside them.
-- `form_quality < 3` discounts that set's volume 50%. `pain_flag = true` tags the session for review.
-- `safety_gate` is the only source of truth for contraindications. If it says unsafe, no alternative is suggested.
-- The DuckDB file is canonical — `log.md` is retired to a frozen reference.
-- Full offline operation. Optional vision API for `visual_delta`.
-- Tier 3 semantic memory (long-term) never writes without explicit user command.
+- The safety gate is the only source of truth for contraindications.
+- Volume is hard sets (form_quality < 3 discounts 50%), never tonnage.
+- Long-term memory writes never happen without an explicit user command.
+- The DuckDB file is canonical; full offline operation.

@@ -9,6 +9,10 @@
     "coach_sessions": "allow",
     "coach_injuries_list": "allow",
     "coach_injuries_seed": "allow",
-    "coach_ingest": "allow"
+    "coach_ingest": "allow",
+    "coach_profile_get": "allow",
+    "coach_profile_set": "allow",
+    "coach_memory_save": "allow",
+    "coach_memory_search": "allow"
   }
 }
