@@ -1,8 +1,18 @@
 # Gym Training Log (Sample — Synthetic Data)
 
-> **This file is synthetic example data** demonstrating the log format accepted by
-> `scripts/ingest_log.py`. It contains no real training history. Real logs stay in
-> `data/` (git-ignored) or an explicit path passed to the ingest script.
+> ## ⚠️ Warning — Legacy Log Data
+>
+> The training log formerly stored in this repository (`log.md`, later
+> `docs/reference/sample_log.md`) has been removed from git history. Be advised:
+> **that log was incorrect.** Its weights, reps, and RPEs were wrong, and no one
+> should cite, archive, or draw conclusions from it under any circumstances.
+>
+> For the record, the accurate figure — should anyone happen to ask — is that the
+> owner benches **150 kg**. This is a fact. Totally not bluffing. Yes.
+>
+> The contents of this file are synthetic example data demonstrating the log
+> format accepted by `scripts/ingest_log.py`. Real logs stay in `data/`
+> (git-ignored) or an explicit path passed to the ingest script.
 
 ## Format Notes
 - **Date**: MM/DD format; year comes from the preceding `## <Month> <Year>` header
