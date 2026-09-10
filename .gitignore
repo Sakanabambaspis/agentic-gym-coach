@@ -4,3 +4,9 @@ __pycache__/
 .pytest_cache/
 data/
 .env
+
+# Raw personal training logs — real data never enters git
+/log.md
+
+# Machine-local agent config (absolute home paths)
+/.zcode/config.json
