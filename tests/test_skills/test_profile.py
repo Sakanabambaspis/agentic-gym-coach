@@ -1,7 +1,11 @@
 """profile unit tests — roundtrip, history append, goal-change audit, priorities."""
 
+import pytest
+from pydantic import ValidationError
+
 from models import (
-    Goal, GoalKind, MuscleGroup, PhysiqueTarget, TrainingAge, UserProfile,
+    ActivityLevel, Goal, GoalKind, MuscleGroup, PhysiqueTarget, Sex,
+    TrainingAge, UserProfile,
 )
 from skills.init import get_duckdb
 from skills.profile import derive_priority_muscles, get_profile, set_profile
@@ -75,3 +79,35 @@ def test_derive_priority_muscles():
     # nothing declared anywhere -> balanced (empty)
     p3 = _profile(priority_muscles=[], goals=[])
     assert derive_priority_muscles(p3) == []
+
+
+def test_nutrition_fields_roundtrip():
+    set_profile(_profile(
+        sex=Sex.male, age_years=35, bodyweight_kg=78.5,
+        bodyfat_pct=15.0, activity_level=ActivityLevel.lightly_active,
+    ))
+    got = get_profile()
+    assert got.sex == Sex.male
+    assert got.age_years == 35
+    assert got.bodyweight_kg == 78.5
+    assert got.bodyfat_pct == 15.0
+    assert got.activity_level == ActivityLevel.lightly_active
+
+
+def test_nutrition_fields_default_to_none():
+    set_profile(_profile())
+    got = get_profile()
+    assert got.sex is None
+    assert got.age_years is None
+    assert got.bodyweight_kg is None
+    assert got.bodyfat_pct is None
+    assert got.activity_level is None
+
+
+def test_nutrition_bounds_rejected():
+    with pytest.raises(ValidationError):
+        _profile(age_years=120)
+    with pytest.raises(ValidationError):
+        _profile(bodyweight_kg=0)
+    with pytest.raises(ValidationError):
+        _profile(bodyfat_pct=80.0)

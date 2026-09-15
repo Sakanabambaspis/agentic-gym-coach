@@ -25,11 +25,14 @@ persona, create a subagent (`.claude/agents/coach.md`) whose body is
 `docs/COACH_PROMPT.md` — or register it in `scripts/sync_adapters.py`'s
 `ADAPTERS` list and run the script to render it automatically.
 
-**ZCode** — add the server in your workspace MCP configuration pointing at
-`<repo>/.venv/bin/python mcp_server.py` (working directory = repo root), and
-load `docs/COACH_PROMPT.md` as the coach agent's system prompt. The vendored
-skills under `docs/knowledge/*/SKILL.md` are also directly loadable as
-SKILL.md-format skills if your runtime discovers them.
+**ZCode** — **wired.** The workspace config `.zcode/config.json` registers
+the `gym-coach` MCP server (absolute paths to `.venv/bin/python` +
+`mcp_server.py`); ZCode auto-connects workspace-scoped servers at session
+start. The workspace skill `.zcode/skills/gym-coach/SKILL.md` routes
+coaching requests ("coach me", "log today: …") to the persona: it directs
+the agent to read `docs/COACH_PROMPT.md` and use the `coach_*` MCP tools.
+The vendored skills under `docs/knowledge/*/SKILL.md` are also directly
+loadable as SKILL.md-format skills.
 
 **Cursor / Codex CLI / Continue / others** — any stdio MCP server entry with
 command `<repo>/.venv/bin/python`, args `["mcp_server.py"]`, cwd `<repo>`

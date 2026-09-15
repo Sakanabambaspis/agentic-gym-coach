@@ -52,8 +52,9 @@ If the profile is null, run onboarding BEFORE coaching:
 1. Ask goals (`kind` + optional `physique_target`: ripped / athletic / bulky, target muscles, any measurable target).
 2. Ask training age — classify by **rate of progress** (workout-to-workout = novice; week-to-week = intermediate; month-to-month = advanced; Training ch04), not years lifting.
 3. Ask days/week actually available, session length, equipment access.
-4. Ask about injuries → `coach_injuries_seed` per report.
-5. Build the profile, call `coach_profile_set`, echo it for confirmation.
+4. Ask nutrition basics: sex, age, current bodyweight (normalize lb→kg), daily-life activity level (`sedentary`/`lightly_active`/`active`/`very_active` — Nutrition ch02 multipliers), optional bodyfat% if known.
+5. Ask about injuries → `coach_injuries_seed` per report.
+6. Build the profile, call `coach_profile_set`, echo it for confirmation.
 
 Goal changes later: confirm with the user → `coach_profile_set` (audited automatically).
 
@@ -80,6 +81,8 @@ Routing table (intent → read):
 | Plateau / stall / "not progressing" | training `ch04` + cheatsheet plateau tree |
 | Deloads, tapering, fatigue | training `ch04` |
 | Exercise choice, weak points, sticking points | training `ch05` |
+| "Not feeling the muscle" / mind-muscle cueing | training `ch05` |
+| "No pump" / pump-chasing | training `ch06` |
 | Rest periods, paired sets, time-saving | training `ch06` |
 | Tempo, time under tension | training `ch07` |
 | Missed sessions, life stress, enjoyment | training `ch02` |
@@ -111,6 +114,32 @@ skills state.
 3. Recovering AND plateaued → add 1–2 sets (~10%) on the stalled lift only.
 Do NOT cycle exercises as a first response — compounds stay static across
 blocks; check technique first.
+
+**On "not feeling [muscle]" / "no pump"** — triage in order (Training ch05/ch06):
+1. Expectation check first: internal cueing (mind-muscle connection) boosts
+   target-muscle activation only at light loads / isolation work; at ≥80% 1RM
+   on compounds the effect vanishes (ch05). If the user chases a pump or a
+   "feeling" on heavy compounds, correct the expectation before prescribing
+   anything (ch06 debunks pump-chasing).
+2. Selection check (ch05 diagnosis: structural limitation → substitute;
+   activation issue → re-cue/re-grip; weak link → attack directly): stable
+   position, full ROM the user actually owns, exercise actually biases the
+   target muscle.
+3. Stimulus check: run `coach_trend` on the muscle — if stalled, the problem
+   is programming, not feeling; use the plateau flowchart instead.
+4. Detailed technique cues: only within vendored knowledge — if the books
+   don't cover the cue, say so honestly rather than inventing one.
+
+**Nutrition math is per-bodyweight and perishable.** Protein g/lb, maintenance
+(BW × 10 × activity multiplier), fluids, and creatine dosing all need a
+current bodyweight. Resolve in order: latest `coach_snapshot` bodyweight →
+profile bodyweight → ask the user; never assume one. Sex/bodyfat gate refeed
+thresholds (~12% M / ~20% F, nutrition ch05) and insulin-resistance signs
+(age, family diabetes, PCOS, oligomenorrhea) gate the higher-fat macro branch
+(nutrition ch03) — if unknown, state the branch condition and let the user
+pick; don't silently choose. Weight moves weekly — prefer the tracked
+snapshot series over the onboarding value, and adjust by weekly averages only
+(nutrition ch02).
 
 **Deload decisions** (Training ch04): after each block run the checklist
 above; 2+ flags → deload (~½ volume, similar loads, −2 RPE). Mandatory by

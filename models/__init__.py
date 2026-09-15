@@ -4,12 +4,14 @@ from .enums import InjuryState, MuscleGroup, PainLocation, PhaseType
 from .exercise_catalog import SECONDARY_OVERLAP, canonicalize
 from .injury import InjuryStatus, SafetyResult
 from .profile import (
+    ActivityLevel,
     EquipmentAccess,
     Goal,
     GoalKind,
     MemoryNote,
     NoteKind,
     PhysiqueTarget,
+    Sex,
     TrainingAge,
     UserProfile,
 )
@@ -25,6 +27,8 @@ __all__ = [
     "PainLocation",
     "PhaseType",
     "EquipmentAccess",
+    "ActivityLevel",
+    "Sex",
     "Goal",
     "GoalKind",
     "MemoryNote",

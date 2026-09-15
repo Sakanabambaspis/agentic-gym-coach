@@ -8,6 +8,7 @@ Read before writing any code or answering architecture questions:
 2. **MEMORY_PROTOCOL.md** — three-tier memory, state transitions, safety guards
 3. **`docs/COACH_PROMPT.md`** — the canonical Coach persona (rendered into runtime agent files)
 4. **`docs/adapters.md`** — how runtimes attach (MCP is the single tool surface)
+5. **`docs/IDEAS.md`** — future feature ideas / dev notebook; consult before proposing features, record new ones there
 
 Conflict resolution: **safety layer > vendored skills (`docs/knowledge/helms-*`) > mechanics docs.** v1 knowledge documents were removed as unsourced — never resurrect their doctrine; extend knowledge by vendoring a book-skill, not by hand-writing physiology.
 

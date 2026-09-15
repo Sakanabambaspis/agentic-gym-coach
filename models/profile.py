@@ -46,6 +46,21 @@ class EquipmentAccess(str, Enum):
     minimal = "minimal"
 
 
+class Sex(str, Enum):
+    male = "male"
+    female = "female"
+
+
+class ActivityLevel(str, Enum):
+    """Daily-life activity outside lifting — Nutrition ch02 fallback-equation
+    multipliers (all brackets already assume lifting 3–6×/wk)."""
+
+    sedentary = "sedentary"          # 1.3–1.6
+    lightly_active = "lightly_active"  # 1.5–1.8
+    active = "active"                # 1.7–2.0
+    very_active = "very_active"      # 1.9–2.2
+
+
 class NoteKind(str, Enum):
     preference = "preference"
     lesson = "lesson"
@@ -72,6 +87,14 @@ class UserProfile(BaseModel):
     priority_muscles: list[MuscleGroup] = Field(default_factory=list)
     liked_exercises: list[str] = Field(default_factory=list)
     disliked_exercises: list[str] = Field(default_factory=list)
+    # Nutrition-side inputs (Nutrition ch02–ch05 prescriptions are per-bodyweight,
+    # sex-, age-, and bodyfat-dependent). bodyweight_kg is the onboarding snapshot;
+    # the tracked series lives in phase_snapshots.body_weight_kg.
+    sex: Sex | None = None
+    age_years: int | None = Field(default=None, ge=14, le=100)
+    bodyweight_kg: float | None = Field(default=None, gt=0, le=400)
+    bodyfat_pct: float | None = Field(default=None, gt=0, le=70)
+    activity_level: ActivityLevel | None = None
     updated_at: datetime | None = None
 
 
