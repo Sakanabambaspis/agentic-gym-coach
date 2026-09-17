@@ -2,7 +2,14 @@
 
 Invoked by the MCP server (mcp_server.py) or directly from the shell:
 `python coach_tools.py <cmd> <json>`.
-All output is JSON to stdout. Errors print {"error": ...} and exit 1.
+All output is JSON to stdout.
+
+Error contract (both surfaces): a failure prints/returns
+    {"error": <code>, "exception": <class name>, "detail": <message>}
+and the CLI exits 1. Codes:
+    invalid_input — fix the arguments (bad vocabulary, missing key, wrong type)
+    db            — storage failure: halt and report; don't retry blindly
+    internal      — unexpected bug: halt and report
 
 bash 0.5s budget per call. Skills are pure deterministic code.
 """
@@ -16,9 +23,46 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+# Single-sourced surface defaults (AGENTS.md's three-places rule): the MCP
+# wrappers import these for their signature defaults — change them HERE only.
+DEFAULT_TREND_WINDOW_DAYS = 28
+DEFAULT_SESSIONS_LIMIT = 10
+DEFAULT_SEARCH_LIMIT = 20
+DEFAULT_MEMORY_KIND = "observation"
+
+# Caller mistakes (bad value, missing key, wrong type) — the caller can fix
+# these by re-issuing the call. Anything else is db/internal: halt and report.
+_INPUT_ERROR_EXCS = (ValueError, TypeError, KeyError, AttributeError)
+
 
 def _parse_date(s: str | None) -> date | None:
     return date.fromisoformat(s) if s else None
+
+
+def _int_arg(args: dict, key: str, default: int, *,
+             minimum: int | None = None, maximum: int | None = None) -> int:
+    """Strict integer argument: rejects "28" (string), 3.7 (float), bools —
+    same acceptance rules as the typed MCP schemas (adversarial F5/F6/F7)."""
+    v = args.get(key, default)
+    if isinstance(v, bool) or not isinstance(v, int):
+        raise ValueError(f"{key} must be an integer, got {type(v).__name__}")
+    if minimum is not None and v < minimum:
+        raise ValueError(f"{key} must be >= {minimum}")
+    if maximum is not None and v > maximum:
+        raise ValueError(f"{key} must be <= {maximum}")
+    return v
+
+
+def error_payload(e: Exception) -> dict:
+    """Translate any exception into the documented three-code error contract."""
+    from duckdb import Error as DuckDBError
+    if isinstance(e, _INPUT_ERROR_EXCS):  # pydantic ValidationError subclasses ValueError
+        code = "invalid_input"
+    elif isinstance(e, DuckDBError):
+        code = "db"
+    else:
+        code = "internal"
+    return {"error": code, "exception": type(e).__name__, "detail": str(e)}
 
 
 def cmd_log_session(args: dict):
@@ -45,7 +89,8 @@ def cmd_trend(args: dict):
     muscle = MuscleGroup(args["muscle"])
     return get_specialization_trend(
         muscle,
-        window_days=int(args.get("window_days", 28)),
+        window_days=_int_arg(args, "window_days", DEFAULT_TREND_WINDOW_DAYS,
+                             minimum=1, maximum=3650),
         end_date=_parse_date(args.get("end_date")),
     ).model_dump(mode="json")
 
@@ -57,7 +102,7 @@ def cmd_snapshot(args: dict):
 
 def cmd_sessions(args: dict):
     from skills.init import get_duckdb
-    limit = int(args.get("limit", 10))
+    limit = _int_arg(args, "limit", DEFAULT_SESSIONS_LIMIT, minimum=0)
     rows = get_duckdb().execute(
         "SELECT id, date, phase, pre_recovery_score, post_feedback "
         "FROM sessions ORDER BY date DESC, created_at DESC LIMIT ?",
@@ -68,32 +113,26 @@ def cmd_sessions(args: dict):
 
 
 def cmd_injuries_list(args: dict):
-    from skills.init import get_duckdb
-    rows = get_duckdb().execute(
-        "SELECT id, location, status, severity, contraindicated_exercises, "
-        "safe_alternatives, updated_at "
-        "FROM injury_status ORDER BY updated_at DESC"
-    ).fetchall()
-    cols = ["id", "location", "status", "severity",
-            "contraindicated_exercises", "safe_alternatives", "updated_at"]
-    return [dict(zip(cols, r)) for r in rows]
+    from skills.injuries import list_injuries
+    return [i.model_dump(mode="json") for i in list_injuries()]
 
 
 def cmd_injuries_seed(args: dict):
-    from skills.init import get_duckdb
-    get_duckdb().execute(
-        "INSERT INTO injury_status(location, status, severity, "
-        "contraindicated_exercises, safe_alternatives) "
-        "VALUES (?, ?, ?, ?, ?)",
-        [
-            args["location"],
-            args["status"],
-            int(args["severity"]),
-            args.get("contraindicated_exercises", []),
-            args.get("safe_alternatives", []),
-        ],
+    from skills.injuries import seed_injury
+    res = seed_injury(
+        args["location"], args["status"], args["severity"],
+        args.get("contraindicated_exercises"), args.get("safe_alternatives"),
     )
-    return {"ok": True, "message": f"seeded {args['location']}={args['status']}"}
+    message = f"seeded {res.injury.location.value}={res.injury.status.value}"
+    if res.needs_review:
+        message += (" — unmapped exercise names, confirm with the user: "
+                    + ", ".join(res.needs_review))
+    return {
+        "ok": True,
+        "message": message,
+        "injury": res.injury.model_dump(mode="json"),
+        "needs_review": res.needs_review,
+    }
 
 
 def cmd_profile_get(args: dict):
@@ -105,8 +144,13 @@ def cmd_profile_get(args: dict):
 def cmd_profile_set(args: dict):
     from models import UserProfile
     from skills.profile import set_profile
-    p = set_profile(UserProfile.model_validate(args))
-    return p.model_dump(mode="json")
+    profile = UserProfile.model_validate(args)
+    if profile == UserProfile():
+        # An all-default profile would silently disarm the onboarding gate
+        # (adversarial F3): refuse instead of writing it.
+        raise ValueError("profile is empty — provide at least one field "
+                         "(goals, training_age, days_per_week, bodyweight_kg, ...)")
+    return set_profile(profile).model_dump(mode="json")
 
 
 def cmd_memory_save(args: dict):
@@ -114,7 +158,7 @@ def cmd_memory_save(args: dict):
     from skills.memory import add_note
     note = add_note(
         args["text"],
-        kind=NoteKind(args.get("kind", "observation")),
+        kind=NoteKind(args.get("kind", DEFAULT_MEMORY_KIND)),
         tags=args.get("tags", []),
     )
     return note.model_dump(mode="json")
@@ -125,7 +169,7 @@ def cmd_memory_search(args: dict):
     notes = search_notes(
         query=args.get("query"),
         tags=args.get("tags"),
-        limit=int(args.get("limit", 20)),
+        limit=_int_arg(args, "limit", DEFAULT_SEARCH_LIMIT, minimum=0),
     )
     return [n.model_dump(mode="json") for n in notes]
 
@@ -163,7 +207,7 @@ def main() -> None:
         else:
             print(json.dumps(result, indent=2, default=str))
     except Exception as e:
-        print(json.dumps({"error": type(e).__name__, "detail": str(e)}, indent=2))
+        print(json.dumps(error_payload(e), indent=2, default=str))
         sys.exit(1)
 
 

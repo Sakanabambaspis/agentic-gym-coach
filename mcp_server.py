@@ -3,6 +3,7 @@
 Claude Code, ZCode, Cursor, Codex CLI, Continue, etc. attach this
 one server instead of per-runtime tool glue. It wraps the SAME handlers as
 the CLI dispatcher (coach_tools.py) — change handlers there, never here.
+Signature defaults are imported from coach_tools so they cannot drift.
 
 Plus `coach_doctrine(topic)`: procedural disclosure over MCP — returns the
 routing table, or a knowledge file's content, for runtimes that cannot read
@@ -32,7 +33,8 @@ _KNOWLEDGE = ROOT / "docs" / "knowledge"
 
 
 def _run(cmd: str, args: dict) -> dict:
-    """Dispatch to the shared handler; preserve the halt-and-report posture."""
+    """Dispatch to the shared handler; preserve the halt-and-report posture
+    with the documented three-code error contract (see coach_tools docstring)."""
     try:
         fn = coach_tools.DISPATCH[cmd]
     except KeyError:
@@ -40,19 +42,21 @@ def _run(cmd: str, args: dict) -> dict:
     try:
         return fn(args)
     except Exception as e:  # surface the failure, never fabricate
-        return {"error": type(e).__name__, "detail": str(e)}
+        return coach_tools.error_payload(e)
 
 
 @mcp.tool()
 def coach_log_session(date: str, exercises: list[dict], phase: str | None = None,
-                      post_feedback: str | None = None) -> dict:
+                      post_feedback: str | None = None,
+                      pre_recovery_score: int | None = None) -> dict:
     """Persist a training session (validated, canonicalized, anomaly-flagged).
 
     exercises: [{name, sets, reps[], rpe[], weight_kg[], tempo?, form_quality?, pain_flag?, notes?}] —
     arrays are per-set, equal length; weight_kg null = bodyweight/unrecorded.
     """
     return _run("log_session", {"date": date, "exercises": exercises,
-                                "phase": phase, "post_feedback": post_feedback})
+                                "phase": phase, "post_feedback": post_feedback,
+                                "pre_recovery_score": pre_recovery_score})
 
 
 @mcp.tool()
@@ -63,24 +67,26 @@ def coach_safety_check(exercise: str) -> dict:
 
 @mcp.tool()
 def coach_recovery(date: str | None = None) -> dict:
-    """Heuristic 0-100 recovery score for a date (0-59 rest, 60-84 light, 85+ train)."""
+    """Heuristic 0-100 recovery score for a date (<60 deload, <80 autoregulate, <100 may train, 100 push-ready)."""
     return _run("recovery", {"date": date})
 
 
 @mcp.tool()
-def coach_trend(muscle: str, window_days: int = 28, end_date: str | None = None) -> dict:
-    """Effective hard sets, avg RPE, est 1RM (≤6-rep sets), and stall flag for a muscle group over a window."""
+def coach_trend(muscle: str,
+                window_days: int = coach_tools.DEFAULT_TREND_WINDOW_DAYS,
+                end_date: str | None = None) -> dict:
+    """Effective hard sets, avg RPE, est 1RM (≤6-rep sets), trend direction, and stall flag for a muscle group over a window (detail block: tonnage, unloaded/overlap sets, uncapped Epley)."""
     return _run("trend", {"muscle": muscle, "window_days": window_days, "end_date": end_date})
 
 
 @mcp.tool()
 def coach_snapshot() -> dict:
-    """Generate/refresh the 4-week phase snapshot (incl. block_state: time since last deload)."""
+    """Compute the 4-week phase snapshot and UPSERT today's phase_snapshots row (re-running rewrites today's anchor; incl. block_state: time since last deload)."""
     return _run("snapshot", {})
 
 
 @mcp.tool()
-def coach_sessions(limit: int = 10) -> dict:
+def coach_sessions(limit: int = coach_tools.DEFAULT_SESSIONS_LIMIT) -> dict:
     """List recent sessions (id, date, phase, pre_recovery_score, post_feedback)."""
     return _run("sessions", {"limit": limit})
 
@@ -95,7 +101,11 @@ def coach_injuries_list() -> dict:
 def coach_injuries_seed(location: str, status: str, severity: int,
                         contraindicated_exercises: list[str] | None = None,
                         safe_alternatives: list[str] | None = None) -> dict:
-    """Insert an injury record. Only when the user explicitly reports a new injury or state change."""
+    """Insert an injury record. Only when the user explicitly reports a new injury or state change.
+
+    Exercise names are canonicalized against the catalog; unmapped names are
+    stored verbatim and returned in `needs_review` — confirm them with the user.
+    """
     return _run("injuries_seed", {"location": location, "status": status, "severity": severity,
                                   "contraindicated_exercises": contraindicated_exercises or [],
                                   "safe_alternatives": safe_alternatives or []})
@@ -109,20 +119,22 @@ def coach_profile_get() -> dict:
 
 @mcp.tool()
 def coach_profile_set(profile: dict) -> dict:
-    """Create/update the user profile (validated, versioned; goal changes audited). Echo it to the user after setting."""
+    """Create/update the user profile (validated, versioned; goal changes audited). Echo it to the user after setting. An all-empty profile is refused."""
     return _run("profile_set", profile)
 
 
 @mcp.tool()
-def coach_memory_save(text: str, kind: str = "observation", tags: list[str] | None = None) -> dict:
+def coach_memory_save(text: str,
+                      kind: str = coach_tools.DEFAULT_MEMORY_KIND,
+                      tags: list[str] | None = None) -> dict:
     """Save a long-term memory note. ONLY on an explicit user command ('save this') — never auto-write."""
     return _run("memory_save", {"text": text, "kind": kind, "tags": tags or []})
 
 
 @mcp.tool()
 def coach_memory_search(query: str | None = None, tags: list[str] | None = None,
-                        limit: int = 20) -> dict:
-    """Search long-term memory notes (substring + any-tag)."""
+                        limit: int = coach_tools.DEFAULT_SEARCH_LIMIT) -> dict:
+    """Search long-term memory notes (substring AND any-tag, newest first)."""
     return _run("memory_search", {"query": query, "tags": tags, "limit": limit})
 
 

@@ -11,8 +11,9 @@ for equal hypertrophy). Rules:
     reported in `detail` for reference only
 
 est_1rm_kg: Epley over sets with reps <= 6 only ("estimate 1RM only from
-~5RM-or-heavier performances", ch04). The uncapped Epley max is kept in
-`detail.epley_all_reps`.
+~5RM-or-heavier performances", ch04). Formula and cap live in skills/metrics.py
+— the single definition shared with snapshot. The uncapped Epley max is kept
+in `detail.epley_all_reps`.
 
 trend_direction: est-1RM trend across window halves when qualifying heavy
 sets exist (±2%), else hard-set totals (strict compare). `stalled` = plateau
@@ -28,12 +29,11 @@ from datetime import date, timedelta
 
 import polars as pl
 
-from models import MuscleGroup, TrendReport
+from models import MuscleGroup, TrendDirection, TrendReport
 from models.exercise_catalog import SECONDARY_OVERLAP, secondary_exercises
 
 from .init import get_duckdb
-
-_EPLEY_MAX_REPS = 6  # ~5RM-or-heavier doctrine (Training ch04)
+from .metrics import epley_expr, qualifies_for_est_1rm
 
 
 def _fetch_entries(start: date, end: date) -> pl.DataFrame:
@@ -96,7 +96,7 @@ def get_specialization_trend(
         return TrendReport(
             muscle=muscle, window_days=window_days, effective_volume=0.0,
             avg_rpe=None, est_1rm_kg=None, stalled=False,
-            trend_direction="unknown", sessions_in_window=0,
+            trend_direction=TrendDirection.unknown, sessions_in_window=0,
             detail={"unloaded_sets": 0, "overlap_sets": 0.0},
         )
 
@@ -119,23 +119,18 @@ def get_specialization_trend(
     ).item() or 0.0
     avg_rpe = per_set.select(pl.col("rpe").mean()).item()
 
-    qualifies = (
-        pl.col("weight_kg").is_not_null() & pl.col("reps").is_not_null()
-        & (pl.col("reps") <= _EPLEY_MAX_REPS)
-    )
-    est_1rm = per_set.filter(qualifies).select(
-        (pl.col("weight_kg") * (1.0 + pl.col("reps") / 30.0)).max()
-    ).item()
+    qualifies = qualifies_for_est_1rm("weight_kg", "reps")
+    est_1rm = per_set.filter(qualifies).select(epley_expr("weight_kg", "reps").max()).item()
     epley_all = per_set.select(
         pl.when(pl.col("weight_kg").is_not_null() & pl.col("reps").is_not_null())
-        .then(pl.col("weight_kg") * (1.0 + pl.col("reps") / 30.0))
+        .then(epley_expr("weight_kg", "reps"))
         .max()
     ).item()
     unloaded = int(per_set.filter(pl.col("weight_kg").is_null()).height)
 
     # --- trend across first vs second half of the window (by date) ---------
     sessions = df["date"].unique().sort().len()
-    trend_direction = "unknown"
+    trend_direction = TrendDirection.unknown
     if sessions >= 4:
         dates = df["date"].unique().sort()
         mid = dates.len() // 2
@@ -143,34 +138,34 @@ def get_specialization_trend(
         in_first = pl.col("date").is_in(list(first_dates))
 
         tf_est = per_set.filter(in_first & qualifies).select(
-            (pl.col("weight_kg") * (1.0 + pl.col("reps") / 30.0)).max()
+            epley_expr("weight_kg", "reps").max()
         ).item()
         ts_est = per_set.filter(~in_first & qualifies).select(
-            (pl.col("weight_kg") * (1.0 + pl.col("reps") / 30.0)).max()
+            epley_expr("weight_kg", "reps").max()
         ).item()
         if tf_est is not None and ts_est is not None:
             # strength progress: est-1RM trend, ±2% band
             if ts_est > tf_est * 1.02:
-                trend_direction = "up"
+                trend_direction = TrendDirection.up
             elif ts_est < tf_est * 0.98:
-                trend_direction = "down"
+                trend_direction = TrendDirection.down
             else:
-                trend_direction = "plateau"
+                trend_direction = TrendDirection.plateau
         else:
             tf = df.filter(in_first).select(
                 (pl.col("sets") * pl.col("form_mult")).sum()).item() or 0.0
             ts = df.filter(~in_first).select(
                 (pl.col("sets") * pl.col("form_mult")).sum()).item() or 0.0
             if tf == 0 and ts == 0:
-                trend_direction = "unknown"
+                trend_direction = TrendDirection.unknown
             elif ts > tf:
-                trend_direction = "up"
+                trend_direction = TrendDirection.up
             elif ts < tf:
-                trend_direction = "down"
+                trend_direction = TrendDirection.down
             else:
-                trend_direction = "plateau"
+                trend_direction = TrendDirection.plateau
 
-    stalled = trend_direction in ("plateau", "down")
+    stalled = trend_direction in (TrendDirection.plateau, TrendDirection.down)
 
     return TrendReport(
         muscle=muscle, window_days=window_days,

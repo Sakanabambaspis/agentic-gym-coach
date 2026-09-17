@@ -44,7 +44,9 @@ the repo's knowledge files directly.
 It can drive everything through `python coach_tools.py <cmd> '<json>'`
 (JSON to stdout; `{"error": ...}` + exit 1 on failure) once it reads
 `docs/COACH_PROMPT.md` for the workflow. You lose only the typed tool
-schemas.
+schemas. Note the CLI payload ceiling: the whole payload is one argv
+argument, so the OS rejects anything past ~128 KB on Linux (`E2BIG` at
+spawn, before the tool runs) — long free text belongs on the MCP surface.
 
 ## Adding a native agent-file adapter
 

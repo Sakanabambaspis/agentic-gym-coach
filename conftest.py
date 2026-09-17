@@ -38,23 +38,19 @@ def _init_test_schema():
     # leave the temp file; OS temp cleanup handles it eventually
 
 
+_TABLES = ("sessions", "injury_status", "decision_log",
+           "phase_snapshots", "user_profiles", "memory_notes")
+
+
 @pytest.fixture(autouse=True)
 def _clean_tables():
     """Wipe the data tables before+after every test so results don't bleed."""
     from skills.init import get_duckdb
 
     d = get_duckdb()
-    d.execute("DELETE FROM sessions")
-    d.execute("DELETE FROM injury_status")
-    d.execute("DELETE FROM decision_log")
-    d.execute("DELETE FROM phase_snapshots")
-    d.execute("DELETE FROM user_profiles")
-    d.execute("DELETE FROM memory_notes")
+    for t in _TABLES:
+        d.execute(f"DELETE FROM {t}")
     yield
     d = get_duckdb()
-    d.execute("DELETE FROM sessions")
-    d.execute("DELETE FROM injury_status")
-    d.execute("DELETE FROM decision_log")
-    d.execute("DELETE FROM phase_snapshots")
-    d.execute("DELETE FROM user_profiles")
-    d.execute("DELETE FROM memory_notes")
+    for t in _TABLES:
+        d.execute(f"DELETE FROM {t}")

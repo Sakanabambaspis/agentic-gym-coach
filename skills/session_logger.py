@@ -2,8 +2,8 @@
 
 Flow:
   1. Pydantic already validated `data` on construction (caller's job).
-  2. Resolve `phase` if the user didn't set it (current phase from latest
-     snapshot; default to maintenance when none exists) so the
+  2. Resolve `phase` if the user didn't set it — skills.phase.phase_for_logging
+     (current snapshot → modal session phase → maintenance default) so the
      user never has to tag a phase.
   3. Canonicalize each exercise: fill muscle_group from the catalog and
      store the canonical name (raw text survives in log.md).
@@ -17,24 +17,17 @@ from __future__ import annotations
 
 from datetime import date
 
-from models import AnomalyFlag, ExerciseModel, LogConfirmation, PhaseType, SessionInput, canonicalize
+from models import (
+    AnomalyCode,
+    AnomalyFlag,
+    ExerciseModel,
+    LogConfirmation,
+    SessionInput,
+    canonicalize,
+)
 
 from .init import get_duckdb
-
-# ponytail: baseline phase when none is known. Not a fabricated measurement —
-# it's the goal-agnostic off-season phase, the safe default before any snapshot.
-_DEFAULT_PHASE = PhaseType.maintenance
-
-
-def _resolve_phase(data: SessionInput) -> PhaseType:
-    if data.phase is not None:
-        return data.phase
-    cur = get_duckdb().execute(
-        "SELECT phase FROM phase_snapshots ORDER BY snapshot_date DESC LIMIT 1"
-    ).fetchone()
-    if cur and cur[0] is not None:
-        return PhaseType(cur[0])  # DuckDB returns enum as plain string
-    return _DEFAULT_PHASE
+from .phase import phase_for_logging
 
 
 def _canonicalize_exercises(data: SessionInput) -> list[AnomalyFlag]:
@@ -46,14 +39,15 @@ def _canonicalize_exercises(data: SessionInput) -> list[AnomalyFlag]:
         ex.name = can_name
         if needs_review:
             flags.append(AnomalyFlag(
-                code="needs_review",
+                code=AnomalyCode.needs_review,
                 detail=f"unmapped exercise '{ex.name}' guessed as {ex.muscle_group.value}",
             ))
         if ex.pain_flag:
-            flags.append(AnomalyFlag(code="pain_flag", detail=f"{ex.name}: pain during exercise"))
+            flags.append(AnomalyFlag(
+                code=AnomalyCode.pain_flag, detail=f"{ex.name}: pain during exercise"))
         if ex.form_quality < 3:
             flags.append(AnomalyFlag(
-                code="form_quality_low",
+                code=AnomalyCode.form_quality_low,
                 detail=f"{ex.name}: form_quality={ex.form_quality} (volume -50% downstream)",
             ))
     return flags
@@ -78,7 +72,7 @@ def _to_struct_list(exercises: list[ExerciseModel]) -> list[dict]:
 
 
 def log_session(data: SessionInput) -> LogConfirmation:
-    phase = _resolve_phase(data)
+    phase = phase_for_logging(data.phase)
     flags = _canonicalize_exercises(data)
 
     structs = _to_struct_list(data.exercises)

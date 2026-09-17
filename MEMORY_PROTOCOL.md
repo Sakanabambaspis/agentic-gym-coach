@@ -98,9 +98,9 @@ def finalize_session(session_data: SessionInput):
 
 2.3 Phase Transition Protocol
 When user initiates new phase OR snapshot interval reached:
-Run generate_phase_snapshot()
-Present snapshot to user for review
-On confirmation: write to phase_snapshots table + propose semantic memory updates
+Run generate_phase_snapshot() — v2 computes AND upserts today's phase_snapshots row in the same call (an idempotent anchor document, not an immutable record; re-running after a profile change is expected and rewrites today's row)
+Review the returned snapshot with the user before acting on it
+Propose semantic memory updates
 Update current phase in working memory config
 Log transition event in decision audit trail
 

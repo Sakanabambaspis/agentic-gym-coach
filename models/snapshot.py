@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .enums import MuscleGroup, PhaseType
+from .enums import MuscleGroup, PhaseType, TrendDirection
 
 
 class TrendReport(BaseModel):
@@ -23,7 +23,7 @@ class TrendReport(BaseModel):
     avg_rpe: float | None = None
     est_1rm_kg: float | None = None  # Epley from reps<=6 sets only (Training ch04)
     stalled: bool = False
-    trend_direction: str = "unknown"  # 'up' | 'down' | 'plateau'
+    trend_direction: TrendDirection = TrendDirection.unknown
     sessions_in_window: int = 0
     detail: dict[str, Any] = Field(default_factory=dict)
 

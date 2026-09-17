@@ -1,6 +1,6 @@
 # AGENTS.md — Agentic Gym Coach (v2)
 
-Workspace state: **v2.1 — opencode legacy adapter removed; tool surface = CLI + MCP only.** General-purpose coach: dual Helms skills vendored as the only doctrine, user-profile + memory layer (migration 0002), volume currency switched to effective hard sets with overlap, deterministic safety layer retained. 56 tests + 1 slow perf guard passing.
+Workspace state: **v2.2 — night-run maintenance pass (2026-09-17) applied.** Tool surface = CLI + MCP only; dual Helms skills vendored as the only doctrine; user-profile + memory layer (migration 0002); volume currency = effective hard sets with overlap. The 2026-09-16/17 review batch (docs/reviews/) is fixed: injuries write path validates + canonicalizes via `skills/injuries.py` (single owner of the injury_status schema), one phase resolver (`skills/phase.py`), one Epley definition (`skills/metrics.py`), enforced Tier-1 3K-token cap, three-code error contract (`invalid_input` / `db` / `internal`), surface defaults single-sourced with a CI drift test (tests/test_surface_drift.py). CLI cold start ~0.16s (lancedb import is lazy). 176 tests + 1 slow perf guard passing.
 
 ## Read order & precedence
 Read before writing any code or answering architecture questions:
@@ -56,6 +56,7 @@ No lint/typecheck config exists in this repo — don't invoke tools that aren't 
 ## Repo-specific constraints (differ from defaults)
 - **Polars, never Pandas** — strict.
 - **Pydantic V2** validates all inputs/outputs at DuckDB boundaries; per-set arrays (reps/rpe/weight_kg) must be equal length (enforced by validator).
+- **`coach_snapshot` computes AND upserts** today's `phase_snapshots` row on every call (decision 2026-09-17, resolving audit Q3/T10: idempotent upsert by snapshot_date; MEMORY_PROTOCOL §2.3 states the same policy).
 - **Volume currency = effective hard sets** (form_quality < 3 ⇒ 50% discount; primary + secondary 1:1 via `SECONDARY_OVERLAP`; bodyweight sets count). Tonnage is detail-only. est_1RM from reps ≤ 6 sets only.
 - **`safety_gate.check_exercise_safety()` is deterministic** — if it returns unsafe, never suggest that exercise; offer `SafetyResult` alternatives instead.
 - **No LLM reasoning inside `skills/`** — skills are pure code.

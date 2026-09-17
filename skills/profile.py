@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from models import Goal, UserProfile
+from models import DecisionEventType, Goal, UserProfile
 
 from .init import get_duckdb
 
@@ -48,9 +48,10 @@ def set_profile(profile: UserProfile) -> UserProfile:
             """
             INSERT INTO decision_log (event_type, trigger_signal, reasoning_chain,
                                       alternative_rejected, future_validation_tag)
-            VALUES ('goal_change', ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             """,
             [
+                DecisionEventType.goal_change.value,
                 f"goal change: removed={removed or 'none'} added={added or 'none'}",
                 "user-declared goal update during coach session",
                 "keeping prior goals against user intent",

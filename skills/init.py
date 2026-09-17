@@ -2,20 +2,24 @@
 
 Persistent file mode (SPEC §1.1):
   - DuckDB: data/gym_coach.duckdb
-  - LanceDB: data/lance_db/
+  - LanceDB: data/lance_db/ (deferred — v2 Tier 3 uses DuckDB tables)
 
 A module-level cache keeps one connection per process. Skills call
 get_duckdb()/get_lance() instead of opening their own — avoids locking
 fights and keeps the close path in one place.
+
+`lancedb` is imported lazily inside get_lance(): nothing in v2 calls it, and
+its ~1.8s import cost would otherwise tax every CLI invocation against the
+0.5s per-call budget (perf bench 2026-09-17).
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import duckdb
-import lancedb
 
 # ponytail: process-global singletons. DB file is single-writer anyway,
 # so parallel connections buy nothing here. Swap for a pool if concurrent
@@ -37,10 +41,12 @@ def get_duckdb() -> duckdb.DuckDBPyConnection:
     return _duck
 
 
-def get_lance():
+def get_lance() -> Any:
     """Return the shared LanceDB connection (creates the dir on first call)."""
     global _lance
     if _lance is None:
+        import lancedb  # lazy: ~1.8s import, unused by any v2 skill
+
         _LANCE_PATH.mkdir(parents=True, exist_ok=True)
         _lance = lancedb.connect(str(_LANCE_PATH))
     return _lance

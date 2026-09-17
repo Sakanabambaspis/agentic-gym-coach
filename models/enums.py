@@ -48,7 +48,7 @@ class PainLocation(str, Enum):
     left_hip = "left_hip"
     right_hip = "right_hip"
     lower_back = "lower_back"
-    none = "none"
+    none = "none"  # sentinel for "pain reported, no specific location" — not a body part
 
 
 class InjuryState(str, Enum):
@@ -56,3 +56,28 @@ class InjuryState(str, Enum):
     resolving = "resolving"
     resolved = "resolved"
     chronic_baseline = "chronic_baseline"
+
+
+class TrendDirection(str, Enum):
+    """est-1RM / hard-set trend across the window halves (trend_analysis)."""
+
+    up = "up"
+    down = "down"
+    plateau = "plateau"
+    unknown = "unknown"
+
+
+class AnomalyCode(str, Enum):
+    """Exactly the codes session_logger emits when writing a session."""
+
+    pain_flag = "pain_flag"
+    form_quality_low = "form_quality_low"
+    needs_review = "needs_review"
+
+
+class DecisionEventType(str, Enum):
+    """Controlled vocabulary for the decision_log audit trail (SPEC §5)."""
+
+    plan_modification = "plan_modification"
+    anomaly = "anomaly"
+    goal_change = "goal_change"

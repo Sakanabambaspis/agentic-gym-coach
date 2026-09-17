@@ -1,8 +1,16 @@
 """Pydantic schemas shared by skills. Import from here, not submodules."""
 
-from .enums import InjuryState, MuscleGroup, PainLocation, PhaseType
+from .enums import (
+    AnomalyCode,
+    DecisionEventType,
+    InjuryState,
+    MuscleGroup,
+    PainLocation,
+    PhaseType,
+    TrendDirection,
+)
 from .exercise_catalog import SECONDARY_OVERLAP, canonicalize
-from .injury import InjuryStatus, SafetyResult
+from .injury import InjurySeedResult, InjuryStatus, SafetyResult
 from .profile import (
     ActivityLevel,
     EquipmentAccess,
@@ -20,12 +28,15 @@ from .snapshot import PhaseSnapshot, RecoveryScore, TrendReport, VisualDelta
 from .working_memory import WorkingMemoryState
 
 __all__ = [
+    "AnomalyCode",
+    "DecisionEventType",
     "InjuryState",
     "SECONDARY_OVERLAP",
     "canonicalize",
     "MuscleGroup",
     "PainLocation",
     "PhaseType",
+    "TrendDirection",
     "EquipmentAccess",
     "ActivityLevel",
     "Sex",
@@ -36,6 +47,7 @@ __all__ = [
     "PhysiqueTarget",
     "TrainingAge",
     "UserProfile",
+    "InjurySeedResult",
     "InjuryStatus",
     "SafetyResult",
     "AnomalyFlag",

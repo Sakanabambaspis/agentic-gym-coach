@@ -7,7 +7,10 @@ gives the LLM-time orchestrator:
     the audit trail, clear Tier 1 (§2.2)
   - log_decision(): write an audit-trail row to decision_log (SPEC §3.2)
 
-All reads/writes go through the determinstic skills + the DB; never fabricate.
+All reads/writes go through the deterministic skills + the DB; never fabricate.
+
+Surface note (audit Q1): no CLI/MCP command exposes these yet — tests exercise
+them, and they are the intended wiring point for a future session surface.
 """
 
 from __future__ import annotations
@@ -15,53 +18,29 @@ from __future__ import annotations
 from datetime import date
 
 from models import (
-    InjuryState, PainLocation, PhaseType, SessionInput,
+    DecisionEventType,
+    LogConfirmation,
+    SessionInput,
     WorkingMemoryState,
 )
-from models.injury import InjuryStatus
 from skills.init import get_duckdb
+from skills.injuries import get_active_injuries
+from skills.phase import current_phase
 from skills.profile import derive_priority_muscles, get_profile
 from skills.recovery import compute_recovery_score
 from skills.session_logger import log_session
 from skills.trend_analysis import get_specialization_trend
 
-_TIER1_LIMIT_TOKENS = 3000
+_TIER1_LIMIT_TOKENS = 3000  # MEMORY_PROTOCOL §1 hard cap
 
 _current_wm: WorkingMemoryState | None = None
-
-
-def _active_injuries() -> list[InjuryStatus]:
-    rows = get_duckdb().execute(
-        "SELECT location, status, severity, contraindicated_exercises, safe_alternatives "
-        "FROM injury_status WHERE status <> 'resolved'"
-    ).fetchall()
-    out: list[InjuryStatus] = []
-    for loc, st, sev, contra, alts in rows:
-        out.append(InjuryStatus(
-            location=PainLocation(loc), status=InjuryState(st), severity=sev,
-            contraindicated_exercises=list(contra or []),
-            safe_alternatives=list(alts or []),
-        ))
-    return out
-
-
-def _current_phase() -> PhaseType | None:
-    row = get_duckdb().execute(
-        "SELECT phase FROM phase_snapshots ORDER BY snapshot_date DESC LIMIT 1"
-    ).fetchone()
-    if row and row[0]:
-        return PhaseType(row[0])
-    row = get_duckdb().execute(
-        "SELECT phase FROM sessions GROUP BY phase ORDER BY count(*) DESC LIMIT 1"
-    ).fetchone()
-    return PhaseType(row[0]) if row and row[0] else None
 
 
 def initialize_session(today: date | None = None) -> WorkingMemoryState:
     today = today or date.today()
     recovery = compute_recovery_score(today)
-    injuries = _active_injuries()
-    phase = _current_phase()
+    injuries = get_active_injuries()
+    phase = current_phase()
     profile = get_profile()
     priorities = derive_priority_muscles(profile)
     recent = {m: get_specialization_trend(m, window_days=14) for m in priorities}
@@ -71,18 +50,41 @@ def initialize_session(today: date | None = None) -> WorkingMemoryState:
         phase=phase, autoregulation_required=autoreg,
         onboarding_required=profile is None, recent_trends=recent,
     )
+    _enforce_tier1_cap(wm)
     global _current_wm
     _current_wm = wm
-    return wm  # ponytail: caller (LLM) must re-prompt if wm.estimate_tokens() > _TIER1_LIMIT_TOKENS
+    return wm
 
 
-def finalize_session(data: SessionInput) -> object:
-    from models import LogConfirmation  # local import avoids cycle at module load
+def _enforce_tier1_cap(wm: WorkingMemoryState) -> None:
+    """Trim recent_trends (lowest-priority muscle first) until under the cap.
+
+    MEMORY_PROTOCOL §1 calls ~3K tokens a hard limit enforced by the
+    orchestrator — this makes that true. Trimming is audited to decision_log
+    so a truncated Tier-1 load is never silent.
+    """
+    trimmed: list[str] = []
+    while wm.estimate_tokens() > _TIER1_LIMIT_TOKENS and wm.recent_trends:
+        dropped = list(wm.recent_trends)[-1]  # last-inserted = lowest priority
+        del wm.recent_trends[dropped]
+        trimmed.append(dropped.value)
+    if trimmed:
+        log_decision(
+            event_type=DecisionEventType.anomaly,
+            trigger_signal=(f"tier1 exceeded {_TIER1_LIMIT_TOKENS} tokens; "
+                            f"dropped recent_trends for: {', '.join(trimmed)}"),
+            reasoning_chain="MEMORY_PROTOCOL Tier-1 hard cap enforcement",
+            alternative_rejected="keeping all trends (floods the LLM context)",
+            future_validation_tag="recheck after the next profile change",
+        )
+
+
+def finalize_session(data: SessionInput) -> LogConfirmation:
     conf = log_session(data)
     if conf.anomaly_flags:
         log_decision(
-            event_type="anomaly",
-            trigger_signal="; ".join(f"{f.code}={f.detail}" for f in conf.anomaly_flags),
+            event_type=DecisionEventType.anomaly,
+            trigger_signal="; ".join(f"{f.code.value}={f.detail}" for f in conf.anomaly_flags),
             reasoning_chain="auto-detected during session_log write",
             alternative_rejected="none",
             future_validation_tag="review next session of same muscle group",
@@ -93,14 +95,17 @@ def finalize_session(data: SessionInput) -> object:
 
 def log_decision(*, trigger_signal: str, reasoning_chain: str,
                  alternative_rejected: str, future_validation_tag: str,
-                 event_type: str = "plan_modification") -> None:
+                 event_type: DecisionEventType | str = DecisionEventType.plan_modification) -> None:
+    """Append an audit row. `event_type` is checked against the controlled
+    vocabulary — a typo raises here instead of writing an unfilterable row."""
+    et = DecisionEventType(event_type)
     get_duckdb().execute(
         """
         INSERT INTO decision_log (event_type, trigger_signal, reasoning_chain,
                                    alternative_rejected, future_validation_tag)
         VALUES (?, ?, ?, ?, ?)
         """,
-        [event_type, trigger_signal, reasoning_chain, alternative_rejected, future_validation_tag],
+        [et.value, trigger_signal, reasoning_chain, alternative_rejected, future_validation_tag],
     )
 
 

@@ -5,12 +5,23 @@ SPec §1.2 `sessions` table + §1.3 ingestion rules.
 
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .enums import MuscleGroup, PhaseType
+from .enums import AnomalyCode, MuscleGroup, PhaseType
+
+# Per-set plausibility bounds. None = unrecorded (bodyweight / not tracked).
+# Upper bounds are generous human headroom, not physiology: they exist so
+# garbage (rpe=11, sets=1e9, weight=1e308) fails at the boundary instead of
+# poisoning volume sums or crashing at the DB layer (adversarial F5).
+_PER_SET_BOUNDS: dict[str, tuple[float, float]] = {
+    "reps": (0, 100),
+    "rpe": (0, 10),
+    "weight_kg": (0, 2000),
+}
 
 
 class ExerciseModel(BaseModel):
@@ -23,7 +34,7 @@ class ExerciseModel(BaseModel):
 
     name: str
     muscle_group: MuscleGroup | None = None
-    sets: int = Field(ge=1)
+    sets: int = Field(ge=1, le=50)  # per-movement headroom; a 1e9 `sets` breaks every volume sum
     reps: list[float | None] = Field(default_factory=list)
     rpe: list[float | None] = Field(default_factory=list)  # 1-10, None = unrecorded
     weight_kg: list[float | None] = Field(default_factory=list)  # per-set load; None=bodyweight/unrecorded
@@ -32,25 +43,41 @@ class ExerciseModel(BaseModel):
     pain_flag: bool = False
     notes: str | None = None
 
-    @field_validator("reps", "rpe")
+    @field_validator("reps", "rpe", "weight_kg")
     @classmethod
-    def _no_negative(cls, v: list[float | None]) -> list[float | None]:
+    def _sane_per_set_values(cls, v: list[float | None], info) -> list[float | None]:
+        lo, hi = _PER_SET_BOUNDS[info.field_name]
         for x in v:
-            if x is not None and x < 0:
-                raise ValueError("reps/rpe cannot be negative")
+            if x is None:
+                continue
+            if not math.isfinite(x):
+                raise ValueError(f"{info.field_name} values must be finite numbers")
+            if not lo <= x <= hi:
+                raise ValueError(f"{info.field_name} values must be within {lo:g}..{hi:g} (got {x:g})")
         return v
 
     @model_validator(mode="after")
-    def _per_set_arrays_equal_length(self) -> "ExerciseModel":
-        # Analytics explode these arrays per set; mismatched lengths are a
-        # malformed log and must be rejected before the DB write (SPEC §1.3).
-        lengths = {len(x) for x in (self.reps, self.rpe, self.weight_kg) if x}
-        if len(lengths) > 1:
+    def _per_set_arrays_aligned(self) -> "ExerciseModel":
+        # Per-set arrays must describe the same sets: a bodyweight log may omit
+        # weight entirely, so fully-empty arrays are PADDED with None (None =
+        # unrecorded) instead of rejected. True length conflicts (reps=[8,7],
+        # rpe=[8]) are malformed and rejected before the DB write (SPEC §1.3).
+        # Analytics explode these lists per set and polars crashes on unequal
+        # lengths, so everything stored must be explode-safe (adversarial F4).
+        lengths = {name: len(getattr(self, name))
+                   for name in ("reps", "rpe", "weight_kg")}
+        non_empty = {n for n in lengths.values() if n}
+        if len(non_empty) > 1:
             raise ValueError(
                 "reps/rpe/weight_kg are per-set arrays and must be equal length "
-                f"(got reps={len(self.reps)}, rpe={len(self.rpe)}, "
-                f"weight_kg={len(self.weight_kg)})"
+                f"(got reps={lengths['reps']}, rpe={lengths['rpe']}, "
+                f"weight_kg={lengths['weight_kg']}); "
+                "use null entries for unrecorded sets"
             )
+        target = max(non_empty) if non_empty else 0
+        for name, n in lengths.items():
+            if target and n == 0:
+                setattr(self, name, [None] * target)
         return self
 
 
@@ -83,7 +110,7 @@ class SessionInput(BaseModel):
 class AnomalyFlag(BaseModel):
     """One anomaly raised during a log write."""
 
-    code: str  # 'pain_flag', 'form_quality_low', 'rpe_spike', ...
+    code: AnomalyCode
     detail: str
 
 

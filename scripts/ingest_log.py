@@ -15,6 +15,7 @@ once per session. Quirks handled (AGENTS.md `log.md format gotchas`):
 
 Run:  python scripts/ingest_log.py            (ingests log.md)
       python scripts/ingest_log.py --dry-run (parse only, no DB writes)
+      python scripts/ingest_log.py --demo    (self-check: parse sample log, no DB writes)
 """
 
 from __future__ import annotations
@@ -182,7 +183,17 @@ def ingest(path: Path, dry_run: bool = False) -> int:
     return n
 
 
+def _demo() -> int:
+    """Self-check — parses the sample log deterministically, no DB writes."""
+    n = ingest(_REPO_ROOT / "docs" / "reference" / "sample_log.md", dry_run=True)
+    assert n > 10, f"expected many sessions, got {n}"
+    print(f"OK: parsed {n} sessions")
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    if "--demo" in argv:
+        return _demo()
     dry = "--dry-run" in argv
     reset = "--reset" in argv
     pos = [a for a in argv if not a.startswith("--")]
@@ -201,14 +212,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
-# ponytail: self-check — parses the sample log deterministically.
-def _demo():
-    n = ingest(_REPO_ROOT / "docs" / "reference" / "sample_log.md", dry_run=True)
-    assert n > 10, f"expected many sessions, got {n}"
-    print(f"OK: parsed {n} sessions")
-
-
-if __name__ == "__main__" and "--demo" in sys.argv:
-    _demo()
-    sys.exit(0)

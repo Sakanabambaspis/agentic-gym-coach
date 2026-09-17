@@ -30,8 +30,11 @@ import polars as pl
 from models import PhaseSnapshot
 
 from .init import get_duckdb
+from .injuries import tendon_summary
+from .metrics import epley_expr, qualifies_for_est_1rm
+from .phase import current_phase
 from .profile import derive_priority_muscles, get_profile
-from .trend_analysis import _EPLEY_MAX_REPS, hard_sets_by_muscle
+from .trend_analysis import hard_sets_by_muscle
 
 # Representative lifts / muscle: {canonical_exercise: muscle_label}
 REPRESENTATIVE_LIFTS = [
@@ -61,11 +64,8 @@ def _specialization_1rms(sets_df: pl.DataFrame) -> dict[str, float]:
         return {}
     per_set = sets_df.explode(["reps", "rpe", "weight_kg"])
     per_set = per_set.with_columns(
-        pl.when(
-            pl.col("weight_kg").is_not_null() & pl.col("reps").is_not_null()
-            & (pl.col("reps") <= _EPLEY_MAX_REPS)
-        )
-        .then(pl.col("weight_kg") * (1.0 + pl.col("reps") / 30.0))
+        pl.when(qualifies_for_est_1rm("weight_kg", "reps"))
+        .then(epley_expr("weight_kg", "reps"))
         .alias("est_1rm")
     )
     out: dict[str, float] = {}
@@ -74,25 +74,6 @@ def _specialization_1rms(sets_df: pl.DataFrame) -> dict[str, float]:
         if val is not None:
             out[ex] = round(float(val), 1)
     return out
-
-
-def _current_phase() -> str | None:
-    row = get_duckdb().execute(
-        "SELECT phase FROM phase_snapshots ORDER BY snapshot_date DESC LIMIT 1"
-    ).fetchone()
-    if row:
-        return row[0]
-    row = get_duckdb().execute(
-        "SELECT phase, count(*) c FROM sessions GROUP BY phase ORDER BY c DESC LIMIT 1"
-    ).fetchone()
-    return row[0] if row else None
-
-
-def _tendon_summary() -> dict[str, Any]:
-    rows = get_duckdb().execute(
-        "SELECT location, status, severity FROM injury_status WHERE status <> 'resolved'"
-    ).fetchall()
-    return {loc: {"status": st, "severity": sev} for loc, st, sev in rows}
 
 
 def _block_state(today: date) -> dict[str, Any]:
@@ -143,11 +124,11 @@ def generate_phase_snapshot() -> PhaseSnapshot:
     insight, adjust = _insight(vol)
     snap = PhaseSnapshot(
         snapshot_date=today,
-        phase=_current_phase(),
+        phase=current_phase(),
         body_weight_kg=None,  # ponytail: no daily body_weight table yet — add when user logs it
         waist_cm=None,
         specialization_lifts=spec_lifts,
-        tendon_status_summary=_tendon_summary(),
+        tendon_status_summary=tendon_summary(),
         key_insight=insight,
         next_phase_adjustment=adjust,
         block_state=_block_state(today),
@@ -162,7 +143,9 @@ def generate_phase_snapshot() -> PhaseSnapshot:
              specialization_lifts, tendon_status_summary, key_insight, next_phase_adjustment)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        [snap.snapshot_date, snap.phase, snap.body_weight_kg, snap.waist_cm,
+        [snap.snapshot_date,
+         snap.phase.value if snap.phase else None,
+         snap.body_weight_kg, snap.waist_cm,
          spec_lifts, snap.tendon_status_summary, snap.key_insight, snap.next_phase_adjustment],
     )
     return snap

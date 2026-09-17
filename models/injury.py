@@ -22,6 +22,19 @@ class InjuryStatus(BaseModel):
     updated_at: datetime | None = None
 
 
+class InjurySeedResult(BaseModel):
+    """Return of injuries.seed_injury(): the stored row + names to confirm.
+
+    `needs_review` holds canonicalized-but-unmapped exercise names (the
+    catalog had no alias for them). They are stored verbatim and the coach
+    MUST confirm them with the user — an unconfirmed name may not match what
+    the safety gate is queried with.
+    """
+
+    injury: InjuryStatus
+    needs_review: list[str] = Field(default_factory=list)
+
+
 class SafetyResult(BaseModel):
     """Return type of safety_gate.check_exercise_safety().
 
