@@ -29,6 +29,7 @@ from skills.phase import current_phase
 from skills.profile import derive_priority_muscles, get_profile
 from skills.recovery import compute_recovery_score
 from skills.session_logger import log_session
+from skills.snapshot import session_gap
 from skills.trend_analysis import get_specialization_trend
 
 _TIER1_LIMIT_TOKENS = 3000  # MEMORY_PROTOCOL §1 hard cap
@@ -45,10 +46,13 @@ def initialize_session(today: date | None = None) -> WorkingMemoryState:
     priorities = derive_priority_muscles(profile)
     recent = {m: get_specialization_trend(m, window_days=14) for m in priorities}
     autoreg = recovery.score < 60 or len(injuries) > 0
+    gap = session_gap(today)
     wm = WorkingMemoryState(
         date=today, recovery=recovery, active_injuries=injuries,
         phase=phase, autoregulation_required=autoreg,
-        onboarding_required=profile is None, recent_trends=recent,
+        onboarding_required=profile is None,
+        weeks_since_last_session=gap["weeks_since_last_session"],
+        recent_trends=recent,
     )
     _enforce_tier1_cap(wm)
     global _current_wm

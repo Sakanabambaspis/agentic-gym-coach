@@ -10,7 +10,7 @@ set_profile() writes a new row, so goal history is preserved ("why did we
 prioritize X in June?").
 
 Contract: deterministic, offline. get_profile() returns None when no profile
-exists — callers must surface onboarding, never invent defaults.
+exists — the intake scan then reports everything missing; never invent defaults.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from .init import get_duckdb
 
 
 def get_profile() -> UserProfile | None:
-    """Latest profile row, or None (⇒ the coach must run onboarding)."""
+    """Latest profile row, or None (⇒ the intake scan reports everything missing)."""
     row = get_duckdb().execute(
         "SELECT payload FROM user_profiles ORDER BY updated_at DESC LIMIT 1"
     ).fetchone()

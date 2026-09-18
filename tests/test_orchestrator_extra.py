@@ -138,3 +138,60 @@ def test_log_decision_rejects_typo_event_type():
             trigger_signal="t: typo",
             reasoning_chain="t", alternative_rejected="t", future_validation_tag="t",
         )
+
+
+# --- staleness signal on Tier 1 (ticket 02, absorbed by the intake redesign) --
+
+def test_wm_exposes_weeks_since_last_session():
+    import orchestrator
+    _log(T - timedelta(days=57))
+    wm = orchestrator.initialize_session(today=T)
+    assert wm.weeks_since_last_session == 8.1
+
+
+def test_wm_gap_none_without_sessions():
+    import orchestrator
+    wm = orchestrator.initialize_session(today=T)
+    assert wm.weeks_since_last_session is None
+
+
+def test_staleness_detection_is_read_only_and_audit_free():
+    # Crossing the gap threshold arms nothing and writes nothing — the gap is
+    # context for the intake's confirm-present step, never a mutation.
+    import orchestrator
+    from models import UserProfile
+    from skills.profile import set_profile
+    set_profile(UserProfile(priority_muscles=[MuscleGroup.quads]))
+    _log(T - timedelta(days=57))
+    before = (
+        get_duckdb().execute("SELECT count(*) FROM user_profiles").fetchone()[0],
+        get_duckdb().execute("SELECT count(*) FROM decision_log").fetchone()[0],
+    )
+    wm = orchestrator.initialize_session(today=T)
+    assert wm.weeks_since_last_session == 8.1
+    after = (
+        get_duckdb().execute("SELECT count(*) FROM user_profiles").fetchone()[0],
+        get_duckdb().execute("SELECT count(*) FROM decision_log").fetchone()[0],
+    )
+    assert before == after
+
+
+def test_unchanged_profile_via_normal_write_path_audits_nothing():
+    # Ticket 02: a returning user confirming the unchanged profile goes through
+    # the normal profile write path — append-only versioning, and NO goal_change
+    # audit row (that fires only on real goal changes, test_profile.py:49).
+    import orchestrator  # noqa: F401  (same session module state as siblings)
+    from models import UserProfile
+    from skills.profile import get_profile, set_profile
+    p = set_profile(UserProfile(priority_muscles=[MuscleGroup.quads]))
+    n_before = get_duckdb().execute(
+        "SELECT count(*) FROM decision_log WHERE event_type = 'goal_change'"
+    ).fetchone()[0]
+    set_profile(p)  # user confirms: everything unchanged
+    n_after = get_duckdb().execute(
+        "SELECT count(*) FROM decision_log WHERE event_type = 'goal_change'"
+    ).fetchone()[0]
+    assert n_after == n_before
+    rows = get_duckdb().execute("SELECT count(*) FROM user_profiles").fetchone()[0]
+    assert rows == 2  # append-only history preserved
+    assert get_profile().priority_muscles == [MuscleGroup.quads]

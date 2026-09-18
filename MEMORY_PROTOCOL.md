@@ -17,6 +17,7 @@ Contents:
     Active injury flags (via check_exercise_safety)
     Current phase parameters (from latest phase_snapshots)
     Pre-session recovery score (via compute_recovery_score)
+    Weeks since the last logged session (staleness context for the intake’s confirm-present step)
 Lifecycle: Loaded at session init → Updated in real-time during logging → Discarded at session end (persisted changes already written to Tier 2).
 Refresh Trigger: User says "refresh plan" or recovery score changes mid-session.
 
@@ -36,7 +37,7 @@ Query Patterns:
 Tier 3: Semantic Memory (Long-Term Identity & Knowledge)
 Scope: Goal definition, validated preferences, milestone archive.
 Storage (v2): DuckDB — `user_profiles` (validated, append-only UserProfile JSON; latest row = current) + `memory_notes` (freeform notes, substring/tag search). LanceDB semantic search is deferred to v3 (no offline embedder in deps); the protocol's intent is unchanged, only the storage engine.
-Write Policy: memory_notes — MANUAL APPROVAL REQUIRED ("save this" / "remember this"); never auto-write. user_profiles — written after the coach echoes the profile and the user confirms (onboarding or goal change); goal changes are audited to decision_log automatically.
+Write Policy: memory_notes — MANUAL APPROVAL REQUIRED ("save this" / "remember this"); never auto-write. user_profiles — written after the coach echoes the profile and the user confirms (intake collection or goal change); goal changes are audited to decision_log automatically.
 Contents:
     Goal definitions (kind, physique_target, target muscles, metrics, deadlines)
     Validated exercise preferences ("chest-supported rows > barbell rows")
@@ -49,8 +50,8 @@ STATE TRANSITION PROTOCOLS
 2.1 Session Start Sequence
 Pseudocode for orchestrator
 def initialize_session():
-    # 0. Onboarding gate — a coach without a profile asks, never assumes
-    profile = get_profile()          # None ⇒ flag onboarding_required
+    # 0. Intake gate — a coach without data asks, never assumes
+    profile = get_profile()          # None ⇒ flag onboarding_required (intake reports all missing)
 
     # 1. Load Tier 1 working memory
     recovery = compute_recovery_score(today)
@@ -58,6 +59,7 @@ def initialize_session():
     phase = get_current_phase()
     priorities = derive_priority_muscles(profile)   # profile-driven, not hardcoded
     last_sessions = {m: get_specialization_trend(m, window=14) for m in priorities}
+    session_gap = snapshot.session_gap(today)   # staleness context, not a mode switch
 
     # 2. Inject into system prompt as structured block
     working_memory = WorkingMemoryState(
@@ -65,6 +67,7 @@ def initialize_session():
         injuries=injuries,
         phase=phase,
         onboarding_required=profile is None,
+        weeks_since_last_session=session_gap,
         recent_trends=last_sessions
     )
 
@@ -73,6 +76,15 @@ def initialize_session():
         flag_autoregulation_required(working_memory)
 
     return working_memory
+
+Intake assessment (whenever a plan is needed): run the standardized scan
+(skills/intake.assess_intake via coach_intake_status) against INTAKE_CHECKLIST;
+cite collected values and confirm they are still true, ask only for missing
+fields in checklist order, and respect the soft per-domain gates — no
+volunteered plans for a not-ready domain; a provisional plan that names its
+missing data only on explicit user insistence (COACH_PROMPT). There is no
+separate onboarding or re-assessment flow: first-time and returning users run
+the same scan.
 
 2.2 Session End Sequence
 def finalize_session(session_data: SessionInput):

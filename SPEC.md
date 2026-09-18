@@ -30,22 +30,28 @@ Volume currency = effective hard sets per muscle per week: sets × form_mult (fo
 3. SKILL INVENTORY (deterministic Python, no LLM logic)
 - session_logger.log_session(SessionInput) -> LogConfirmation  (<50ms)
 - safety_gate.check_exercise_safety(str) -> SafetyResult  (<10ms, deterministic)
+- injuries.list_injuries()/get_active_injuries()/seed_injury() — single owner of injury_status; write-time vocabulary validation + name canonicalization
 - recovery.compute_recovery_score(date) -> RecoveryScore  (<30ms)
 - trend_analysis.get_specialization_trend(muscle, window_days, end_date) -> TrendReport; hard_sets_by_muscle(start, end)  (<50ms)
-- snapshot.generate_phase_snapshot() -> PhaseSnapshot (incl. computed block_state)  (<200ms)
+- metrics — shared Epley/est-1RM helpers (single definition)
+- phase.current_phase()/phase_for_logging() — single phase resolver
+- snapshot.generate_phase_snapshot() -> PhaseSnapshot (incl. computed block_state + session_gap); session_gap(today) -> weeks since last session + staleness verdict (threshold REASSESSMENT_GAP_WEEKS, a labeled heuristic)  (<200ms)
+- intake.assess_intake() -> IntakeReport — standardized bucket-list scan (models/intake.py INTAKE_CHECKLIST): collected vs missing per field, soft per-domain readiness gates; read-only
 - profile.get_profile()/set_profile()/derive_priority_muscles()
 - memory.add_note()/search_notes()  (Tier 3, manual-save policy)
 - visual_delta.compare_photos(a, b) -> VisualDelta  (stub; optional vision API)
 
 4. SURFACES
 - CLI: python coach_tools.py <cmd> '<json>' (JSON stdout; {"error":...} + exit 1)
-- MCP: mcp_server.py (stdio; 12 coach tools + coach_doctrine) — the cross-runtime tool surface
+- MCP: mcp_server.py (stdio; 13 coach tools + coach_doctrine) — the cross-runtime tool surface
 - Persona: docs/COACH_PROMPT.md (canonical; renderable into native agent files via scripts/sync_adapters.py)
 - See docs/adapters.md. (The v1/v2 opencode native adapter was removed — MCP is the single tool surface.)
 
 5. INVARIANTS
 - Skills are pure deterministic code; reasoning happens in the orchestrator/agent.
 - Safety gate result is binding: safe=false ⇒ never suggest the exercise.
+- Intake gates are soft: a not-ready domain gets no volunteered plans, and a provisional plan (explicit user insistence only) must name every missing field and its limitation. There is one intake flow — no separate onboarding/re-assessment modes.
+- The session-gap staleness threshold is a labeled heuristic (not book-sourced), configurable only in skills/snapshot.py (REASSESSMENT_GAP_WEEKS).
 - Tier 3 memory writes require an explicit user command; never auto-write.
 - Cite retrieved values; missing data = "I don't have that data." Never fabricate.
 - Every plan modification (incl. goal changes) lands in decision_log.

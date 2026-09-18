@@ -50,6 +50,9 @@ class PhaseSnapshot(BaseModel):
     next_phase_adjustment: str = ""
     # computed, not persisted: input to the mandatory-deload floor (Training ch04)
     block_state: dict[str, Any] = Field(default_factory=dict)
+    # computed, not persisted: weeks since the last logged session + staleness
+    # verdict (threshold is a labeled heuristic — skills.snapshot.REASSESSMENT_GAP_WEEKS)
+    session_gap: dict[str, Any] = Field(default_factory=dict)
 
 
 class VisualDelta(BaseModel):

@@ -8,7 +8,10 @@ trend_analysis.hard_sets_by_muscle (single shared definition).
 
 `block_state` is COMPUTED, NOT PERSISTED: weeks/blocks since the last
 deload-phase session — input to the mandatory-deload floor ("deload by the
-3rd mesocycle regardless", Training ch04). body_weight_kg / waist_cm are
+3rd mesocycle regardless", Training ch04). `session_gap` is likewise
+computed, not persisted: weeks since the last logged session + whether the
+staleness threshold is crossed (a labeled heuristic — see
+REASSESSMENT_GAP_WEEKS below). body_weight_kg / waist_cm are
 None until a daily logging path exists — honest "I don't have that data".
 
 Insight targets come from the user profile's priority muscles; no profile ⇒
@@ -41,6 +44,36 @@ REPRESENTATIVE_LIFTS = [
     "Incline Bench Press", "Shoulder Press", "Reverse Fly", "Pull-Up", "Row",
 ]
 _WINDOW_DAYS = 28
+
+# HEURISTIC, NOT book-sourced: detraining timelines are not covered by the
+# vendored books (docs/IDEAS.md #1) — the only layoff note is Nutrition ch02's
+# caveat that the 2-week maintenance method is invalid for returning lifters.
+# A gap (weeks since the last logged session) at/above this arms the intake's
+# staleness nudge: cite stored values and confirm them before programming.
+# Single source — snapshot, working memory, and the intake scan all read the
+# verdict from session_gap(); change the threshold HERE only.
+REASSESSMENT_GAP_WEEKS = 8.0
+
+
+def session_gap(today: date | None = None) -> dict[str, Any]:
+    """Weeks since the last logged session (any phase) + staleness verdict.
+
+    computed, NOT persisted (same policy as block_state). Weeks are rounded
+    to 1dp BEFORE the comparison so the exposed number and the verdict always
+    agree; verdict is `weeks >= REASSESSMENT_GAP_WEEKS`. No sessions at all ⇒
+    weeks None, verdict False (the intake scan reports the missing data
+    itself; there is nothing stale to re-confirm).
+    """
+    today = today or date.today()
+    row = get_duckdb().execute("SELECT MAX(date) FROM sessions").fetchone()
+    last = row[0] if row else None
+    if last is None:
+        return {"weeks_since_last_session": None, "reassessment_recommended": False}
+    weeks = round((today - last).days / 7.0, 1)
+    return {
+        "weeks_since_last_session": weeks,
+        "reassessment_recommended": weeks >= REASSESSMENT_GAP_WEEKS,
+    }
 
 
 def _fetch_all_sets(start: date, end: date) -> pl.DataFrame:
@@ -95,7 +128,7 @@ def _insight(vol_by_muscle: dict[str, float]) -> tuple[str, str]:
     if profile is None:
         return (
             "no user profile set — priorities unknown",
-            "run onboarding and set goals via coach_profile_set",
+            "run the standardized intake and set goals via coach_profile_set",
         )
     targets = [m.value for m in derive_priority_muscles(profile)]
     if not targets:
@@ -132,6 +165,7 @@ def generate_phase_snapshot() -> PhaseSnapshot:
         key_insight=insight,
         next_phase_adjustment=adjust,
         block_state=_block_state(today),
+        session_gap=session_gap(today),
     )
 
     d = get_duckdb()

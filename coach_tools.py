@@ -100,6 +100,11 @@ def cmd_snapshot(args: dict):
     return generate_phase_snapshot().model_dump(mode="json")
 
 
+def cmd_intake_status(args: dict):
+    from skills.intake import assess_intake
+    return assess_intake().model_dump(mode="json")
+
+
 def cmd_sessions(args: dict):
     from skills.init import get_duckdb
     limit = _int_arg(args, "limit", DEFAULT_SESSIONS_LIMIT, minimum=0)
@@ -180,6 +185,7 @@ DISPATCH = {
     "recovery": cmd_recovery,
     "trend": cmd_trend,
     "snapshot": cmd_snapshot,
+    "intake_status": cmd_intake_status,
     "sessions": cmd_sessions,
     "injuries_list": cmd_injuries_list,
     "injuries_seed": cmd_injuries_seed,

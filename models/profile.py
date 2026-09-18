@@ -61,6 +61,35 @@ class ActivityLevel(str, Enum):
     very_active = "very_active"      # 1.9–2.2
 
 
+class StressLevel(str, Enum):
+    """Perceived life stress outside training — Training ch02 counts it in the
+    same recovery budget as training stress ("one cumulative stress bucket":
+    when the life side spikes, the training side must drop)."""
+
+    low = "low"
+    moderate = "moderate"
+    high = "high"
+
+
+class TrackingTier(str, Enum):
+    """Nutrition ch07 tracking levels, best → habit. Tier drops are planned
+    events on missed data, so the coach needs to know where the user starts."""
+
+    best = "best"      # full macros at phase-dependent tolerances
+    better = "better"  # protein target + calories
+    good = "good"      # calories only
+    habit = "habit"    # habits + 7-day weight average (gated by the estimation test)
+
+
+class SocialSupport(str, Enum):
+    """Whether the user's social environment supports the plan — Nutrition
+    ch08: support measurably improves behavior change; framily briefings etc."""
+
+    supportive = "supportive"
+    neutral = "neutral"
+    unsupportive = "unsupportive"
+
+
 class NoteKind(str, Enum):
     preference = "preference"
     lesson = "lesson"
@@ -83,7 +112,9 @@ class UserProfile(BaseModel):
     training_age: TrainingAge | None = None
     days_per_week: int | None = Field(default=None, ge=1, le=7)
     session_length_min: int | None = Field(default=None, ge=15, le=240)
-    equipment_access: EquipmentAccess = EquipmentAccess.full_gym
+    # None until the user answers — never assume full_gym (the intake scan
+    # must report it missing, not launder the default into a collected value).
+    equipment_access: EquipmentAccess | None = None
     priority_muscles: list[MuscleGroup] = Field(default_factory=list)
     liked_exercises: list[str] = Field(default_factory=list)
     disliked_exercises: list[str] = Field(default_factory=list)
@@ -95,6 +126,36 @@ class UserProfile(BaseModel):
     bodyweight_kg: float | None = Field(default=None, gt=0, le=400)
     bodyfat_pct: float | None = Field(default=None, gt=0, le=70)
     activity_level: ActivityLevel | None = None
+    # Training-side lifestyle & history — standardized-intake x-factors.
+    # life_stress: Training ch02 (one cumulative stress bucket with training).
+    # concurrent_sports: Training ch02 (interference effect; priority principle).
+    # rpe_calibrated: Training ch08 (novices don't program by RPE until calibrated).
+    # has_tested_maxes: Training ch08/ch09 ("no tested 1RM → RPE alone").
+    life_stress: StressLevel | None = None
+    concurrent_sports: list[str] = Field(default_factory=list)
+    rpe_calibrated: bool | None = None
+    has_tested_maxes: bool | None = None
+    # Nutrition-side lifestyle & history — standardized-intake x-factors.
+    # diet_phase_duration_weeks: Nutrition ch05 (≥3 months dieting → diet breaks).
+    # tracking_tier: Nutrition ch07 (tier drops are planned events — need the start point).
+    # meals_per_day / eating_out_per_week / alcohol_per_week / social_support:
+    #   Nutrition ch05 (3–6 meals, consistency over count) and ch08.
+    # supplement_notes / caffeine_intake: Nutrition ch06 (three-filter stack audit;
+    #   caffeine dosing is tolerance-dependent) — freeform, e.g. "2 coffees/day".
+    diet_phase_duration_weeks: int | None = Field(default=None, ge=0, le=520)
+    tracking_tier: TrackingTier | None = None
+    meals_per_day: int | None = Field(default=None, ge=1, le=10)
+    eating_out_per_week: int | None = Field(default=None, ge=0, le=21)
+    alcohol_per_week: int | None = Field(default=None, ge=0, le=100)
+    social_support: SocialSupport | None = None
+    supplement_notes: str | None = None
+    caffeine_intake: str | None = None
+    # Nutrition ch03 insulin-resistance macro-branch gates (age, family diabetes
+    # history, PCOS, oligomenorrhea). Ask when relevant to a nutrition plan,
+    # phrased sensitively; never guess a value.
+    family_diabetes_history: bool | None = None
+    pcos: bool | None = None
+    oligomenorrhea: bool | None = None
     updated_at: datetime | None = None
 
 

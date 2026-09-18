@@ -101,3 +101,12 @@ def test_injuries_seed_via_dispatch_canonicalizes_and_gates():
 def test_injuries_seed_via_dispatch_rejects_bad_vocab():
     with pytest.raises(ValidationError):
         DISPATCH["injuries_seed"]({"location": "elbow", "status": "active", "severity": 3})
+
+
+# --- intake scan surface ------------------------------------------------------
+
+def test_intake_status_reports_missing_and_ready_flags():
+    out = DISPATCH["intake_status"]({})
+    assert out["training_ready"] is False
+    assert out["nutrition_ready"] is False
+    assert "bodyweight_kg" in out["missing"]

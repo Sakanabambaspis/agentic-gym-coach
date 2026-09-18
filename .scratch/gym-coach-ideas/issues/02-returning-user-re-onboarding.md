@@ -10,16 +10,30 @@ onboarding, which stays as-is.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** absorbed (2026-09-19) — superseded by the standardized intake
+redesign (`docs/adr/0001-standardized-intake-soft-gates.md`). The detection
+half shipped as designed; the two-flow idea was generalized into ONE intake
+flow with no modes (the same scan serves first-time and returning users; the
+gap signal makes confirming stored values mandatory before programming, and
+`reconditioning` is the recommended return phase — see COACH_PROMPT
+"Standardized intake assessment").
 
-- [ ] Weeks-since-last-session is computed from session history at session
+- [x] Weeks-since-last-session is computed from session history at session
       start and exposed on the working-memory/snapshot surface
-- [ ] Crossing the gap threshold arms a returning-user re-assessment flow in
+      → `skills/snapshot.session_gap` → `PhaseSnapshot.session_gap` +
+      `WorkingMemoryState.weeks_since_last_session`
+- [x] Crossing the gap threshold arms a returning-user re-assessment flow in
       COACH_PROMPT (confirm profile fields, injury re-check, reconditioning
-      recommendation) — separate from the no-profile onboarding gate
-- [ ] Goal/schedule changes made during re-assessment go through the normal
+      recommendation) — generalized: the gap arms the intake's mandatory
+      confirm-present step rather than a separate mode
+- [x] Goal/schedule changes made during re-assessment go through the normal
       profile write path (goal changes auto-audit to the decision log)
-- [ ] The gap threshold is labeled a heuristic (not book-sourced — see ticket
+      → unchanged `coach_profile_set` path; audited by
+      `test_unchanged_profile_via_normal_write_path_audits_nothing`
+- [x] The gap threshold is labeled a heuristic (not book-sourced — see ticket
       01's detraining caveat), configurable in one place
-- [ ] Tests cover: no sessions at all, gap just under threshold, gap just
+      → `skills/snapshot.REASSESSMENT_GAP_WEEKS`
+- [x] Tests cover: no sessions at all, gap just under threshold, gap just
       over threshold, re-assessment with unchanged profile
+      → `tests/test_skills/test_snapshot_extra.py` (session_gap block),
+      `tests/test_orchestrator_extra.py` (staleness block)

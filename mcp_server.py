@@ -81,8 +81,14 @@ def coach_trend(muscle: str,
 
 @mcp.tool()
 def coach_snapshot() -> dict:
-    """Compute the 4-week phase snapshot and UPSERT today's phase_snapshots row (re-running rewrites today's anchor; incl. block_state: time since last deload)."""
+    """Compute the 4-week phase snapshot and UPSERT today's phase_snapshots row (re-running rewrites today's anchor; incl. block_state: time since last deload, and session_gap: weeks since the last logged session)."""
     return _run("snapshot", {})
+
+
+@mcp.tool()
+def coach_intake_status() -> dict:
+    """Run the standardized intake scan: collected vs missing bucket-list fields (each citing its book source), per-domain readiness (training/nutrition soft gates), and weeks since the last logged session. Read-only — ask the user only for what's missing."""
+    return _run("intake_status", {})
 
 
 @mcp.tool()
@@ -113,7 +119,7 @@ def coach_injuries_seed(location: str, status: str, severity: int,
 
 @mcp.tool()
 def coach_profile_get() -> dict:
-    """Get the user profile (goals, training age, schedule, priorities). {profile: null} ⇒ run onboarding."""
+    """Get the user profile (goals, training age, schedule, priorities). {profile: null} ⇒ the intake scan reports everything missing."""
     return _run("profile_get", {})
 
 

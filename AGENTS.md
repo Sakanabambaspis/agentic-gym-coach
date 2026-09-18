@@ -1,14 +1,15 @@
 # AGENTS.md — Agentic Gym Coach (v2)
 
-Workspace state: **v2.2 — night-run maintenance pass (2026-09-17) applied.** Tool surface = CLI + MCP only; dual Helms skills vendored as the only doctrine; user-profile + memory layer (migration 0002); volume currency = effective hard sets with overlap. The 2026-09-16/17 review batch (docs/reviews/) is fixed: injuries write path validates + canonicalizes via `skills/injuries.py` (single owner of the injury_status schema), one phase resolver (`skills/phase.py`), one Epley definition (`skills/metrics.py`), enforced Tier-1 3K-token cap, three-code error contract (`invalid_input` / `db` / `internal`), surface defaults single-sourced with a CI drift test (tests/test_surface_drift.py). CLI cold start ~0.16s (lancedb import is lazy). 176 tests + 1 slow perf guard passing.
+Workspace state: **v2.3 — standardized intake (2026-09-19).** Onboarding is replaced by a code-driven intake assessment: the bucket list is data (`models/intake.py::INTAKE_CHECKLIST`, every field book-cited or labeled HEURISTIC), `skills/intake.py::assess_intake()` scans stored state for collected vs missing, surfaced as `coach_intake_status` (CLI + MCP). Gates are soft per-domain (`training_ready`/`nutrition_ready`): no volunteered plans when not ready, provisional plans that name their gaps only on explicit user insistence. One flow, no modes — see `docs/adr/0001-standardized-intake-soft-gates.md` and `CONTEXT.md` (glossary). Ticket-02's staleness signal shipped inside it: `session_gap` on the snapshot + `weeks_since_last_session` on Tier-1, threshold `REASSESSMENT_GAP_WEEKS` in `skills/snapshot.py` (a labeled heuristic, not book-sourced). Earlier: v2.2 night-run maintenance pass (2026-09-17) — CLI + MCP only; dual Helms skills vendored as the only doctrine; injuries write path validates + canonicalizes via `skills/injuries.py` (single owner of the injury_status schema), one phase resolver (`skills/phase.py`), one Epley definition (`skills/metrics.py`), enforced Tier-1 3K-token cap, three-code error contract (`invalid_input` / `db` / `internal`), surface defaults single-sourced with a CI drift test (tests/test_surface_drift.py). CLI cold start ~0.16s (lancedb import is lazy). 198 tests + 1 slow perf guard passing.
 
 ## Read order & precedence
 Read before writing any code or answering architecture questions:
 1. **SPEC.md** — v2 schema, skill inventory, surfaces, invariants
-2. **MEMORY_PROTOCOL.md** — three-tier memory, state transitions, safety guards
-3. **`docs/COACH_PROMPT.md`** — the canonical Coach persona (rendered into runtime agent files)
-4. **`docs/adapters.md`** — how runtimes attach (MCP is the single tool surface)
-5. **`docs/IDEAS.md`** — future feature ideas / dev notebook; consult before proposing features, record new ones there
+2. **CONTEXT.md** — the glossary; use these terms exactly (intake assessment, gate, provisional plan, …)
+3. **MEMORY_PROTOCOL.md** — three-tier memory, state transitions, safety guards
+4. **`docs/COACH_PROMPT.md`** — the canonical Coach persona (rendered into runtime agent files)
+5. **`docs/adapters.md`** — how runtimes attach (MCP is the single tool surface)
+6. **`docs/IDEAS.md`** — future feature ideas / dev notebook; consult before proposing features, record new ones there
 
 Conflict resolution: **safety layer > vendored skills (`docs/knowledge/helms-*`) > mechanics docs.** v1 knowledge documents were removed as unsourced — never resurrect their doctrine; extend knowledge by vendoring a book-skill, not by hand-writing physiology.
 
@@ -41,7 +42,7 @@ No lint/typecheck config exists in this repo — don't invoke tools that aren't 
 ## Modularity & maintainability
 - **Skills are standalone, deterministic Python modules** in `skills/`. Each returns Pydantic models (not dicts). No LLM logic lives here — reasoning happens in the orchestrator/agent.
 - Adding/changing a skill → add a module + `tests/test_skills/test_<name>.py`.
-- `models/` holds all Pydantic schemas. `models/enums.py` is the controlled vocabulary — DB columns store VARCHAR, Pydantic enforces (extending a vocabulary needs no migration).
+- `models/` holds all Pydantic schemas. `models/enums.py` is the controlled vocabulary for DB-stored vocabularies (profile-local enums live beside their models in `models/profile.py`) — DB columns store VARCHAR, Pydantic enforces (extending a vocabulary needs no migration).
 - **Adding a coach tool touches three places:** a handler in `coach_tools.py` (DISPATCH), an MCP wrapper in `mcp_server.py`, and a line in `docs/COACH_PROMPT.md`.
 - Schema changes go through Alembic migrations only — never hand-edit `data/gym_coach.duckdb`.
 

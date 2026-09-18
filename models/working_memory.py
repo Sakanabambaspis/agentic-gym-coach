@@ -23,7 +23,10 @@ class WorkingMemoryState(BaseModel):
     active_injuries: list[InjuryStatus] = Field(default_factory=list)
     phase: PhaseType | None = None
     autoregulation_required: bool = False
-    onboarding_required: bool = False  # no user profile yet — coach must run onboarding
+    onboarding_required: bool = False  # no user profile yet — the intake scan reports everything missing
+    # staleness context for the intake's confirm-present step (weeks since the
+    # last logged session; threshold = skills.snapshot.REASSESSMENT_GAP_WEEKS)
+    weeks_since_last_session: float | None = None
     recent_trends: dict[MuscleGroup, TrendReport] = Field(default_factory=dict)
 
     def estimate_tokens(self) -> int:

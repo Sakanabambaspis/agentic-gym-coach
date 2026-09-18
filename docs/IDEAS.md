@@ -82,7 +82,11 @@ goals/schedule/equipment still true, re-check injuries, recommend
 gap) — pick a heuristic, label it, make it configurable. Pure code: a query
 on `MAX(sessions.date)` in the orchestrator/snapshot; no migration.
 
-**Status:** idea.
+**Status:** implemented (2026-09-19), generalized — built as part of the
+standardized intake redesign (one flow, no modes; `docs/adr/0001`). The gap
+signal shipped as the intake's staleness nudge
+(`skills/snapshot.session_gap`, `REASSESSMENT_GAP_WEEKS` heuristic) rather
+than a separate re-assessment mode.
 
 ## 4. Form/technique knowledge via vendored skill
 

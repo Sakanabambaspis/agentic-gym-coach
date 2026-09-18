@@ -92,5 +92,5 @@ def test_pre_recovery_score_bounds():
 
 def test_user_profile_defaults_are_coherent():
     p = UserProfile()
-    assert p.equipment_access is not None
+    assert p.equipment_access is None  # unasked ≠ full gym — the intake must see it missing
     assert p.goals == [] and p.priority_muscles == []

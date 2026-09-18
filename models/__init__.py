@@ -11,6 +11,14 @@ from .enums import (
 )
 from .exercise_catalog import SECONDARY_OVERLAP, canonicalize
 from .injury import InjurySeedResult, InjuryStatus, SafetyResult
+from .intake import (
+    INTAKE_CHECKLIST,
+    FieldReport,
+    FieldStatus,
+    GateDomain,
+    IntakeField,
+    IntakeReport,
+)
 from .profile import (
     ActivityLevel,
     EquipmentAccess,
@@ -20,6 +28,9 @@ from .profile import (
     NoteKind,
     PhysiqueTarget,
     Sex,
+    SocialSupport,
+    StressLevel,
+    TrackingTier,
     TrainingAge,
     UserProfile,
 )
@@ -60,4 +71,13 @@ __all__ = [
     "TrendReport",
     "VisualDelta",
     "WorkingMemoryState",
+    "FieldReport",
+    "FieldStatus",
+    "GateDomain",
+    "INTAKE_CHECKLIST",
+    "IntakeField",
+    "IntakeReport",
+    "SocialSupport",
+    "StressLevel",
+    "TrackingTier",
 ]
