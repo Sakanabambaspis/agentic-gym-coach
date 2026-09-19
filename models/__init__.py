@@ -35,7 +35,7 @@ from .profile import (
     UserProfile,
 )
 from .session import AnomalyFlag, ExerciseModel, LogConfirmation, SessionInput, SessionModel
-from .snapshot import PhaseSnapshot, RecoveryScore, TrendReport, VisualDelta
+from .snapshot import PhaseSnapshot, RecoveryScore, SessionGap, TrendReport, VisualDelta
 from .working_memory import WorkingMemoryState
 
 __all__ = [
@@ -68,6 +68,7 @@ __all__ = [
     "SessionModel",
     "PhaseSnapshot",
     "RecoveryScore",
+    "SessionGap",
     "TrendReport",
     "VisualDelta",
     "WorkingMemoryState",

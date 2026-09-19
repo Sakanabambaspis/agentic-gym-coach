@@ -32,9 +32,10 @@ _Avoid_: best-guess plan, fallback plan
 
 **Collected**:
 A field whose storage holds a real answer. An explicit `false` is collected;
-an emptied list field is collected ("asked, nothing applies") — except
-`goals`, where empty means never-asked ("no specific goal" is its own
-recorded value). Only absence means missing.
+an emptied list field on the profile is collected ("asked, nothing applies")
+— except `goals`, where empty means never-asked ("no specific goal" is its
+own recorded value). An empty injury table is missing: no rows = nothing
+reported. Only absence means missing.
 _Avoid_: valid, known-good (collected values can still be stale)
 
 **Staleness signal (session_gap)**:

@@ -30,7 +30,7 @@ from typing import Any
 
 import polars as pl
 
-from models import PhaseSnapshot
+from models import PhaseSnapshot, SessionGap
 
 from .init import get_duckdb
 from .injuries import tendon_summary
@@ -55,7 +55,7 @@ _WINDOW_DAYS = 28
 REASSESSMENT_GAP_WEEKS = 8.0
 
 
-def session_gap(today: date | None = None) -> dict[str, Any]:
+def session_gap(today: date | None = None) -> SessionGap:
     """Weeks since the last logged session (any phase) + staleness verdict.
 
     computed, NOT persisted (same policy as block_state). Weeks are rounded
@@ -68,12 +68,12 @@ def session_gap(today: date | None = None) -> dict[str, Any]:
     row = get_duckdb().execute("SELECT MAX(date) FROM sessions").fetchone()
     last = row[0] if row else None
     if last is None:
-        return {"weeks_since_last_session": None, "reassessment_recommended": False}
+        return SessionGap()
     weeks = round((today - last).days / 7.0, 1)
-    return {
-        "weeks_since_last_session": weeks,
-        "reassessment_recommended": weeks >= REASSESSMENT_GAP_WEEKS,
-    }
+    return SessionGap(
+        weeks_since_last_session=weeks,
+        reassessment_recommended=weeks >= REASSESSMENT_GAP_WEEKS,
+    )
 
 
 def _fetch_all_sets(start: date, end: date) -> pl.DataFrame:

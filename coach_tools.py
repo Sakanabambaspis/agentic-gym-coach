@@ -151,8 +151,8 @@ def cmd_profile_set(args: dict):
     from skills.profile import set_profile
     profile = UserProfile.model_validate(args)
     if profile == UserProfile():
-        # An all-default profile would silently disarm the onboarding gate
-        # (adversarial F3): refuse instead of writing it.
+        # An all-default profile would silently disarm the intake's empty-profile
+        # signal (adversarial F3): refuse instead of writing it.
         raise ValueError("profile is empty — provide at least one field "
                          "(goals, training_age, days_per_week, bodyweight_kg, ...)")
     return set_profile(profile).model_dump(mode="json")

@@ -37,6 +37,18 @@ class RecoveryScore(BaseModel):
     components: dict[str, Any] = Field(default_factory=dict)
 
 
+class SessionGap(BaseModel):
+    """Weeks since the last logged session + staleness verdict.
+
+    Return of snapshot.session_gap() — computed, not persisted. Threshold:
+    skills.snapshot.REASSESSMENT_GAP_WEEKS, a labeled heuristic (the vendored
+    books don't cover detraining timelines).
+    """
+
+    weeks_since_last_session: float | None = None
+    reassessment_recommended: bool = False
+
+
 class PhaseSnapshot(BaseModel):
     """Return of snapshot.generate_phase_snapshot()."""
 
@@ -50,9 +62,9 @@ class PhaseSnapshot(BaseModel):
     next_phase_adjustment: str = ""
     # computed, not persisted: input to the mandatory-deload floor (Training ch04)
     block_state: dict[str, Any] = Field(default_factory=dict)
-    # computed, not persisted: weeks since the last logged session + staleness
-    # verdict (threshold is a labeled heuristic — skills.snapshot.REASSESSMENT_GAP_WEEKS)
-    session_gap: dict[str, Any] = Field(default_factory=dict)
+    # computed, not persisted: staleness verdict (threshold is a labeled
+    # heuristic — skills.snapshot.REASSESSMENT_GAP_WEEKS)
+    session_gap: SessionGap = Field(default_factory=SessionGap)
 
 
 class VisualDelta(BaseModel):

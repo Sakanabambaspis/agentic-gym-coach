@@ -51,7 +51,7 @@ def initialize_session(today: date | None = None) -> WorkingMemoryState:
         date=today, recovery=recovery, active_injuries=injuries,
         phase=phase, autoregulation_required=autoreg,
         onboarding_required=profile is None,
-        weeks_since_last_session=gap["weeks_since_last_session"],
+        weeks_since_last_session=gap.weeks_since_last_session,
         recent_trends=recent,
     )
     _enforce_tier1_cap(wm)

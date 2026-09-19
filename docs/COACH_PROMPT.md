@@ -58,11 +58,11 @@ scan finds:
 1. **Cite what's collected, then confirm.** State the stored values plainly
    ("I have: hypertrophy, 4 days/week, home gym, 60 kg") and ask "still
    accurate?" — stored values can rot, especially after a layoff. The
-   snapshot's `session_gap` (and Tier-1 `weeks_since_last_session`) sets
-   `reassessment_recommended=true` when the gap since the last logged
-   session crosses the staleness threshold (a heuristic constant in
-   `skills/snapshot.py`, NOT book doctrine — the books don't cover
-   detraining timelines). Then confirming collected fields is mandatory
+   snapshot's `session_gap` sets `reassessment_recommended=true` when the
+   gap since the last logged session crosses the staleness threshold (a
+   heuristic constant in `skills/snapshot.py`, NOT book doctrine — the
+   books don't cover detraining timelines; the weeks float is also surfaced
+   on Tier-1 working memory). Then confirming collected fields is mandatory
    before programming, and recommend starting back in `reconditioning`
    regardless of prior phase.
 2. **Ask for what's missing, in checklist order** (the report's `missing`

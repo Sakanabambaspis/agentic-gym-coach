@@ -112,7 +112,7 @@ def assess_intake(today: date | None = None) -> IntakeReport:
 
     return IntakeReport(
         fields=reports,
-        weeks_since_last_session=gap["weeks_since_last_session"],
+        weeks_since_last_session=gap.weeks_since_last_session,
         training_ready=not missing_by_gate["training"],
         nutrition_ready=not missing_by_gate["nutrition"],
         missing=[r.name for r in reports if r.status is FieldStatus.missing],

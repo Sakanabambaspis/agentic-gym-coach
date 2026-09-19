@@ -50,8 +50,8 @@ STATE TRANSITION PROTOCOLS
 2.1 Session Start Sequence
 Pseudocode for orchestrator
 def initialize_session():
-    # 0. Intake gate — a coach without data asks, never assumes
-    profile = get_profile()          # None ⇒ flag onboarding_required (intake reports all missing)
+    # 0. Profile check — null ⇒ the intake scan reports everything missing
+    profile = get_profile()          # None ⇒ flag onboarding_required
 
     # 1. Load Tier 1 working memory
     recovery = compute_recovery_score(today)
