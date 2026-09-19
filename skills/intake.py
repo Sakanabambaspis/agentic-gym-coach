@@ -29,6 +29,7 @@ from models import (
     FieldReport,
     FieldStatus,
     GateDomain,
+    IntakeField,
     IntakeReport,
     UserProfile,
 )
@@ -63,24 +64,22 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
-def _stored_value(storage: str, profile: UserProfile | None,
+def _stored_value(field: IntakeField, profile: UserProfile | None,
                   injuries: list[InjuryStatus]) -> tuple[Any, bool]:
-    """Resolve one checklist storage path → (raw value, present?).
+    """Resolve one checklist field → (raw value, present?).
 
-    List-typed profile fields (dislikes, concurrent sports, priority
-    muscles, …) are present whenever a profile exists: an empty list is a
-    valid stored answer ("asked, nothing applies"), and strict
-    missing-detection on them could never complete. The one exception is
-    `goals`: an empty goal list is indistinguishable from never-asked, and
-    'no specific goal' has its own vocabulary value (general_fitness), so
-    goals stay strictly presence-checked.
+    Presence semantics are declared on the field (empty_means_missing), not
+    dispatched by name: list-typed profile fields are present whenever a
+    profile exists (empty = valid "nothing applies" answer) unless the field
+    sets empty_means_missing — goals and weekly_availability — where empty is
+    indistinguishable from never-asked.
     """
-    if storage == "injury_status":
+    if field.storage == "injury_status":
         return injuries, _is_present(injuries)
-    if not storage.startswith("profile."):
-        raise ValueError(f"checklist storage path not understood: {storage}")
-    value = getattr(profile, storage.split(".", 1)[1]) if profile else None
-    if isinstance(value, (list, tuple)) and storage != "profile.goals":
+    if not field.storage.startswith("profile."):
+        raise ValueError(f"checklist storage path not understood: {field.storage}")
+    value = getattr(profile, field.storage.split(".", 1)[1]) if profile else None
+    if isinstance(value, (list, tuple)) and not field.empty_means_missing:
         return value, profile is not None
     return value, _is_present(value)
 
@@ -94,7 +93,7 @@ def assess_intake(today: date | None = None) -> IntakeReport:
 
     reports: list[FieldReport] = []
     for f in INTAKE_CHECKLIST:
-        value, present = _stored_value(f.storage, profile, injuries)
+        value, present = _stored_value(f, profile, injuries)
         reports.append(FieldReport(
             **f.model_dump(),
             status=FieldStatus.collected if present else FieldStatus.missing,

@@ -21,6 +21,7 @@ from .intake import (
 )
 from .profile import (
     ActivityLevel,
+    AvailabilityWindow,
     EquipmentAccess,
     Goal,
     GoalKind,
@@ -28,11 +29,11 @@ from .profile import (
     NoteKind,
     PhysiqueTarget,
     Sex,
-    SocialSupport,
     StressLevel,
     TrackingTier,
     TrainingAge,
     UserProfile,
+    Weekday,
 )
 from .session import AnomalyFlag, ExerciseModel, LogConfirmation, SessionInput, SessionModel
 from .snapshot import PhaseSnapshot, RecoveryScore, SessionGap, TrendReport, VisualDelta
@@ -78,7 +79,8 @@ __all__ = [
     "INTAKE_CHECKLIST",
     "IntakeField",
     "IntakeReport",
-    "SocialSupport",
+    "AvailabilityWindow",
+    "Weekday",
     "StressLevel",
     "TrackingTier",
 ]

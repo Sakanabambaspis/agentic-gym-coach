@@ -1,17 +1,22 @@
 # Agentic Gym Coach
 
 A general-purpose, local-first gym coach you talk to like a real one. It
-onboards your goals, remembers your profile, logs your sessions, gates every
-exercise suggestion against your injuries, and answers training + nutrition
-questions from vendored professional sources — never invented science.
+runs one standardized intake — scanning what it already knows and asking
+only for what's missing — remembers your profile, logs your sessions, gates
+every exercise suggestion against your injuries, and answers training +
+nutrition questions from vendored professional sources — never invented
+science.
 
-**First conversation (onboarding):** it asks your goals (hypertrophy,
-strength, fat loss, …), physique target (ripped / athletic / bulky), training
-age, schedule, equipment, and injuries — then coaches toward YOUR profile.
+**First conversation:** the intake scan reports what's missing; it asks your
+goals (hypertrophy, strength, fat loss, …), physique vision, training age,
+schedule windows, equipment, and injuries — then coaches toward YOUR
+profile. Same flow when you return after months away: what's stored gets
+cited and re-confirmed, not re-collecting from scratch.
 
 ```text
 You:  I want to put size on my side delts. 4 days a week, commercial gym.
-Coach: <onboards profile> → builds a program from the training pyramid,
+Coach: <intake scan; asks only what's missing>
+       → builds a program from the training pyramid,
        volume matched to your training age, 2×/week delts.
 
 You:  Log today: Incline Bench 3x8 @ RPE 8, Lateral Raise 4x12 @ RPE 9
@@ -59,7 +64,7 @@ python scripts/ingest_log.py --reset   # optional: import historical log.md
 ## Running tests
 
 ```bash
-python -m pytest -q          # 56 tests, ~3s
+python -m pytest -q          # 201 tests, ~3s
 python -m pytest -m slow -q  # perf guard on 10K rows
 ```
 

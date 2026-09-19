@@ -42,7 +42,10 @@ heuristics and must be labeled as such.
 prescription time; `coach_snapshot` or a new `coach_profile_check` surfaces
 `{field, age_days, verdict}`; COACH_PROMPT rule: "before any concrete
 prescription that consumes a stale field, flag it and re-collect." No
-migration needed (payload JSON); tests on the verdict logic.
+migration needed (payload JSON); tests on the verdict logic. Concrete
+instance (user, 2026-09-20): injury_status rows are "short lived" and should
+be reconfirmed every once in a while — the injury entries of the intake
+checklist already point here.
 
 **Status:** idea — user approved direction, awaiting build decision.
 
@@ -87,6 +90,31 @@ standardized intake redesign (one flow, no modes; `docs/adr/0001`). The gap
 signal shipped as the intake's staleness nudge
 (`skills/snapshot.session_gap`, `REASSESSMENT_GAP_WEEKS` heuristic) rather
 than a separate re-assessment mode.
+
+## 7. Field freshness cadence
+
+**Idea.** Intake fields differ by archetypal volatility that persists
+between users (user framing, 2026-09-20): a schedule is day-to-day volatile,
+physique numbers change slowly, stress moves per session, a goal vision
+evolves on the timescale of self-understanding. The 2026-09-19 intake
+deliberately ships only one persona fact ("stored data are not permanent —
+confirm before a plan leans on them", ADR 0002) to avoid agent-side drift;
+the machinery is this ticket.
+
+**Sketch.** Pin a refresh cadence per checklist field as data
+(`per_session` / `weekly` / `per_block` / `on_change_only`), grounded in
+book statements where they exist — bodyweight weekly (ch02 seven-day
+averages), training age re-classified per block (ch04 rate of progress),
+stress as a per-session recovery check (ch03/ch04) — and labeled heuristic
+elsewhere. Agent discretion bounded: confirm EARLIER on surprise, never
+later than policy. Candidate assignments from the discussion: per_session →
+life_stress; weekly → bodyweight, habits (eating out/alcohol),
+availability; per_block → goals vision, training age, derived priorities,
+preferences, injuries re-confirmation, tested maxes; on_change_only → sex,
+age, equipment.
+
+**Status:** idea — user deferred ("not our responsibility yet"); design
+starting point recorded here.
 
 ## 4. Form/technique knowledge via vendored skill
 

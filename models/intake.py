@@ -11,12 +11,15 @@ present (asking "still accurate?"), asks only for what's missing, in
 checklist order, and applies the soft per-domain gates (COACH_PROMPT
 "Standardized intake assessment").
 
-Excluded from the bucket list on purpose (documented in docs/adr/
-0001-standardized-intake-soft-gates.md): sleep as a static field (both books
-treat recovery questions as recurring check-ins), food allergies/dislikes
-(the nutrition book is anti-preference-exclusion), budget/cooking skill,
-clinical screening, motivation scoring. They stay answerable as ordinary
-coaching questions.
+Excluded from the bucket list on purpose (docs/adr/0001-...md and
+docs/adr/0002-omitted-and-derived-intake-fields.md): sleep as a static field
+(both books treat recovery questions as recurring check-ins), food
+allergies/dislikes (the nutrition book is anti-preference-exclusion),
+budget/cooking skill, clinical screening, motivation scoring — and, after
+first-use feedback: meals (frequency is book-neutral, Nutrition ch05),
+social support (too abstract, effect unpredictable), priority muscles
+(derived from goals + observed weak points, never asked). They stay
+answerable as ordinary coaching questions.
 """
 
 from __future__ import annotations
@@ -49,6 +52,11 @@ class IntakeField(BaseModel):
     storage: str         # "profile.<attr>" or "injury_status"
     gates: GateDomain
     blocks_gate: bool = True  # False = reported when missing, but never holds a gate open
+    # list-typed profile fields only: True = empty list means "never asked"
+    # (strict presence — goals, weekly_availability); False = empty is a valid
+    # "nothing applies" answer. Declared here so the resolver carries no
+    # per-name special cases.
+    empty_means_missing: bool = False
     note: str = ""       # how the coach uses it / how to collect it
 
 
@@ -93,14 +101,10 @@ class IntakeReport(BaseModel):
 INTAKE_CHECKLIST: list[IntakeField] = [
     IntakeField(
         name="goals", source="Training ch02 (deadlines), ch08 (goal column); Nutrition ch02 (rates by goal)",
-        storage="profile.goals", gates=GateDomain.both,
+        storage="profile.goals", gates=GateDomain.both, empty_means_missing=True,
         note=("kind + physique_target + target_muscles + deadline; deadline drives taper and diet timing. "
-              "Empty is NOT an answer — 'no specific goal' is recorded as kind=general_fitness"),
-    ),
-    IntakeField(
-        name="priority_muscles", source="Training ch05 (weak points; diagnose before prescribing)",
-        storage="profile.priority_muscles", gates=GateDomain.both,
-        note="specialization targets; empty = balanced full-body programming",
+              "A vision stated vaguely is recorded as-is (notes/metric) — it is provisional and sharpens "
+              "as understanding grows. Empty is NOT an answer: 'no specific goal' is kind=general_fitness"),
     ),
     IntakeField(
         name="training_age", source="Training ch04 (classify by RATE OF PROGRESS — workout-to-workout / week-to-week / month-to-month — not years lifting)",
@@ -110,29 +114,40 @@ INTAKE_CHECKLIST: list[IntakeField] = [
     IntakeField(
         name="days_per_week", source="Training ch02 ('start with what you can do'), ch08 (2–6 days; 3–5 for 90% of people)",
         storage="profile.days_per_week", gates=GateDomain.training,
-        note="days actually available in a real week, not aspirational",
+        note="committed training days; the WHEN comes from weekly_availability",
+    ),
+    IntakeField(
+        name="weekly_availability", source="Training ch02 ('start with what you can do' — match the program to the actual week) — window structure HEURISTIC",
+        storage="profile.weekly_availability", gates=GateDomain.training, blocks_gate=False,
+        empty_means_missing=True,
+        note=("time windows per weekday; venue captures a closing gym. Vague answers are fine — "
+              "the coach formats them into windows; plan the week around them"),
     ),
     IntakeField(
         name="life_stress", source="Training ch02 (life stress and training stress are one cumulative bucket)",
         storage="profile.life_stress", gates=GateDomain.training,
-        note="work/sleep/family load; high stress ⇒ training side must drop",
+        note=("work/sleep/family load; high stress ⇒ the training side must drop. A rolling "
+              "recent-overall impression — re-confirm at check-ins, expected to move"),
     ),
     IntakeField(
         name="injuries", source="Training ch02 (pain is information), ch05 (pain caps volume; substitutions)",
         storage="injury_status", gates=GateDomain.training, blocks_gate=False,
         note=("rows in injury_status; seed via coach_injuries_seed on any report. "
               "No rows = no reported injuries, so this never holds the gate open — "
-              "persona rule 2 (always check injuries) guarantees the ask."),
+              "persona rule 2 (always check injuries) guarantees the ask. "
+              "Re-confirm periodically: shelf-life tracking is deferred (docs/IDEAS.md #1)."),
     ),
     IntakeField(
         name="exercise_likes", source="Training ch05 (lifters who choose exercises out-gain fixed selection)",
-        storage="profile.liked_exercises", gates=GateDomain.training,
-        note="enjoyment drives adherence (ch02); bounded by proficiency",
+        storage="profile.liked_exercises", gates=GateDomain.training, blocks_gate=False,
+        note=("enjoyment drives adherence (ch02); bounded by proficiency. Emerges over the "
+              "first blocks — the coach proposes, records reactions here"),
     ),
     IntakeField(
         name="exercise_dislikes", source="Training ch02 (enjoyment drives effort), ch05 (preference is a sanctioned selection input)",
-        storage="profile.disliked_exercises", gates=GateDomain.training,
-        note="hated exercises get swapped for pain-free comparable patterns",
+        storage="profile.disliked_exercises", gates=GateDomain.training, blocks_gate=False,
+        note=("hated exercises get swapped for pain-free comparable patterns. Emerges through "
+              "training — not knowable at intake, never forced"),
     ),
     IntakeField(
         name="concurrent_sports", source="Training ch02 (interference effect; one activity takes priority)",
@@ -195,11 +210,6 @@ INTAKE_CHECKLIST: list[IntakeField] = [
         note="willingness/experience selects the prescription tier",
     ),
     IntakeField(
-        name="meals_per_day", source="Nutrition ch05 (3–6 meals; consistency of pattern matters more than count)",
-        storage="profile.meals_per_day", gates=GateDomain.nutrition,
-        note="refeed-day placement keys off training time of day too",
-    ),
-    IntakeField(
         name="eating_out_per_week", source="Nutrition ch08 (frequency caps by phase: prep ~monthly / cut 1–2×/wk)",
         storage="profile.eating_out_per_week", gates=GateDomain.nutrition,
         note="hidden-oil error margin ordering applies",
@@ -208,11 +218,6 @@ INTAKE_CHECKLIST: list[IntakeField] = [
         name="alcohol_per_week", source="Nutrition ch08 (7 kcal/g; ≤15% of daily kcal; ≤2×/wk)",
         storage="profile.alcohol_per_week", gates=GateDomain.nutrition,
         note="drinks/week; automatic tier-drop while drinking",
-    ),
-    IntakeField(
-        name="social_support", source="Nutrition ch08 (social support measurably improves behavior change)",
-        storage="profile.social_support", gates=GateDomain.nutrition,
-        note="drives the framily-briefing / small-footprint strategies",
     ),
     IntakeField(
         name="supplement_notes", source="Nutrition ch06 (audit whatever stack the user reports via the three-filter test)",

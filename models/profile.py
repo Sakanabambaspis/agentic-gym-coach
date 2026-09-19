@@ -71,6 +71,28 @@ class StressLevel(str, Enum):
     high = "high"
 
 
+class Weekday(str, Enum):
+    mon = "mon"
+    tue = "tue"
+    wed = "wed"
+    thu = "thu"
+    fri = "fri"
+    sat = "sat"
+    sun = "sun"
+
+
+class AvailabilityWindow(BaseModel):
+    """One trainable slot in the user's real week (Training ch02: 'start with
+    what you can do'). Times are local 'HH:MM'; end may encode a closing gym.
+    Best-effort by design — vague answers formatted by the coach are fine.
+    """
+
+    weekday: Weekday
+    start: str | None = Field(default=None, pattern=r"^\d{1,2}:\d{2}$")
+    end: str | None = Field(default=None, pattern=r"^\d{1,2}:\d{2}$")
+    venue: str | None = None
+
+
 class TrackingTier(str, Enum):
     """Nutrition ch07 tracking levels, best → habit. Tier drops are planned
     events on missed data, so the coach needs to know where the user starts."""
@@ -79,15 +101,6 @@ class TrackingTier(str, Enum):
     better = "better"  # protein target + calories
     good = "good"      # calories only
     habit = "habit"    # habits + 7-day weight average (gated by the estimation test)
-
-
-class SocialSupport(str, Enum):
-    """Whether the user's social environment supports the plan — Nutrition
-    ch08: support measurably improves behavior change; framily briefings etc."""
-
-    supportive = "supportive"
-    neutral = "neutral"
-    unsupportive = "unsupportive"
 
 
 class NoteKind(str, Enum):
@@ -111,6 +124,9 @@ class UserProfile(BaseModel):
     goals: list[Goal] = Field(default_factory=list)
     training_age: TrainingAge | None = None
     days_per_week: int | None = Field(default=None, ge=1, le=7)
+    # When those days can happen — best-effort windows, formatted by the coach
+    # from whatever the user says ("Fri after 7, school gym closes at 8").
+    weekly_availability: list[AvailabilityWindow] = Field(default_factory=list)
     session_length_min: int | None = Field(default=None, ge=15, le=240)
     # None until the user answers — never assume full_gym (the intake scan
     # must report it missing, not launder the default into a collected value).
@@ -138,16 +154,15 @@ class UserProfile(BaseModel):
     # Nutrition-side lifestyle & history — standardized-intake x-factors.
     # diet_phase_duration_weeks: Nutrition ch05 (≥3 months dieting → diet breaks).
     # tracking_tier: Nutrition ch07 (tier drops are planned events — need the start point).
-    # meals_per_day / eating_out_per_week / alcohol_per_week / social_support:
-    #   Nutrition ch05 (3–6 meals, consistency over count) and ch08.
+    # eating_out_per_week / alcohol_per_week: Nutrition ch08 frequency caps.
     # supplement_notes / caffeine_intake: Nutrition ch06 (three-filter stack audit;
     #   caffeine dosing is tolerance-dependent) — freeform, e.g. "2 coffees/day".
+    # (meals_per_day and social_support were omitted from the intake — see
+    #  docs/adr/0002-omitted-and-derived-intake-fields.md.)
     diet_phase_duration_weeks: int | None = Field(default=None, ge=0, le=520)
     tracking_tier: TrackingTier | None = None
-    meals_per_day: int | None = Field(default=None, ge=1, le=10)
     eating_out_per_week: int | None = Field(default=None, ge=0, le=21)
     alcohol_per_week: int | None = Field(default=None, ge=0, le=100)
-    social_support: SocialSupport | None = None
     supplement_notes: str | None = None
     caffeine_intake: str | None = None
     # Nutrition ch03 insulin-resistance macro-branch gates (age, family diabetes

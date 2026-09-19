@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from models import (
     INTAKE_CHECKLIST,
     ActivityLevel,
+    AvailabilityWindow,
     ExerciseModel,
     FieldStatus,
     Goal,
@@ -14,11 +15,11 @@ from models import (
     MuscleGroup,
     SessionInput,
     Sex,
-    SocialSupport,
     StressLevel,
     TrackingTier,
     TrainingAge,
     UserProfile,
+    Weekday,
 )
 from skills.injuries import seed_injury
 from skills.intake import assess_intake
@@ -44,6 +45,10 @@ def _full_profile() -> UserProfile:
         has_tested_maxes=False,
         session_length_min=60,
         equipment_access="home",
+        weekly_availability=[
+            AvailabilityWindow(weekday=Weekday.fri, start="19:00", end="20:00",
+                               venue="school gym"),
+        ],
         sex=Sex.female,
         age_years=30,
         bodyweight_kg=60.0,
@@ -51,10 +56,8 @@ def _full_profile() -> UserProfile:
         activity_level=ActivityLevel.active,
         diet_phase_duration_weeks=10,
         tracking_tier=TrackingTier.better,
-        meals_per_day=4,
         eating_out_per_week=1,
         alcohol_per_week=2,
-        social_support=SocialSupport.supportive,
         supplement_notes="creatine 5g",
         caffeine_intake="1 coffee/day",
         family_diabetes_history=False,
@@ -189,3 +192,30 @@ def test_unanswered_equipment_access_is_missing_not_default_full_gym():
     equipment = next(f for f in report.fields if f.name == "equipment_access")
     assert equipment.status is FieldStatus.missing
     assert equipment.value is None
+
+
+def test_empty_weekly_availability_is_missing():
+    set_profile(UserProfile(sex=Sex.male))  # availability never asked
+    report = assess_intake(today=TODAY)
+    field = next(f for f in report.fields if f.name == "weekly_availability")
+    assert field.status is FieldStatus.missing
+    assert field.value is None
+
+
+def test_fluid_fields_never_hold_gates_open():
+    # Discovered/pattern fields (preferences, availability) are reported when
+    # missing but must never block a domain; strict-empty is declared on
+    # exactly the fields where empty is indistinguishable from never-asked.
+    flags = {f.name: (f.blocks_gate, f.empty_means_missing) for f in INTAKE_CHECKLIST}
+    for name in ("exercise_likes", "exercise_dislikes", "weekly_availability"):
+        assert flags[name][0] is False, name
+    assert {n for n, (_, emm) in flags.items() if emm} == {"goals", "weekly_availability"}
+
+
+def test_omitted_fields_are_gone_from_schema_and_checklist():
+    # ADR 0002: meal frequency is book-neutral, social support unmeasurable,
+    # priority muscles derived — none of them is an intake question.
+    names = {f.name for f in INTAKE_CHECKLIST}
+    assert {"meals_per_day", "social_support", "priority_muscles"}.isdisjoint(names)
+    assert "meals_per_day" not in UserProfile.model_fields
+    assert "social_support" not in UserProfile.model_fields
