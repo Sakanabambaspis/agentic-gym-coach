@@ -114,7 +114,10 @@ preferences, injuries re-confirmation, tested maxes; on_change_only → sex,
 age, equipment.
 
 **Status:** idea — user deferred ("not our responsibility yet"); design
-starting point recorded here.
+starting point recorded here. See also
+`docs/research/reconditioning-consensus-2026-09-20.md` (detraining/
+retraining evidence base) and tickets 08 (returning-user handling) /
+09 (reconditioning provenance), which consume this sketch.
 
 ## 4. Form/technique knowledge via vendored skill
 
