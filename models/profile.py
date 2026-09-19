@@ -14,7 +14,7 @@ from datetime import date, datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .enums import MuscleGroup
 
@@ -83,14 +83,31 @@ class Weekday(str, Enum):
 
 class AvailabilityWindow(BaseModel):
     """One trainable slot in the user's real week (Training ch02: 'start with
-    what you can do'). Times are local 'HH:MM'; end may encode a closing gym.
-    Best-effort by design — vague answers formatted by the coach are fine.
+    what you can do'). Times are local 24h 'HH:MM', normalized to zero-padded
+    form ("7:00" → "07:00"); end may encode a closing gym. Best-effort by
+    design — vague answers formatted by the coach are fine.
     """
 
     weekday: Weekday
-    start: str | None = Field(default=None, pattern=r"^\d{1,2}:\d{2}$")
-    end: str | None = Field(default=None, pattern=r"^\d{1,2}:\d{2}$")
+    start: str | None = None
+    end: str | None = None
     venue: str | None = None
+
+    @field_validator("start", "end")
+    @classmethod
+    def _normalize_time(cls, v: str | None) -> str | None:
+        # Accepts anything a human might say ("7:00", "07:00", " 7:5 ") and
+        # stores one canonical "HH:MM"; impossible times are rejected, not
+        # stored (99:99, 24:00, 23:60).
+        if v is None:
+            return v
+        parts = v.strip().split(":")
+        if len(parts) != 2 or not all(p.isdigit() for p in parts):
+            raise ValueError(f"time must be 24h HH:MM, got {v!r}")
+        h, m = int(parts[0]), int(parts[1])
+        if h > 23 or m > 59:
+            raise ValueError(f"hour must be 0-23 and minute 0-59, got {v!r}")
+        return f"{h:02d}:{m:02d}"
 
 
 class TrackingTier(str, Enum):

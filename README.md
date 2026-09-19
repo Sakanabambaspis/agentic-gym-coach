@@ -64,7 +64,7 @@ python scripts/ingest_log.py --reset   # optional: import historical log.md
 ## Running tests
 
 ```bash
-python -m pytest -q          # 201 tests, ~3s
+python -m pytest -q          # 204 tests, ~3s
 python -m pytest -m slow -q  # perf guard on 10K rows
 ```
 

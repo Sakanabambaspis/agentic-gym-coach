@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from models import ExerciseModel, SessionInput, UserProfile
+from models import AvailabilityWindow, ExerciseModel, SessionInput, UserProfile, Weekday
 
 D = date(2030, 1, 10)
 
@@ -94,3 +94,21 @@ def test_user_profile_defaults_are_coherent():
     p = UserProfile()
     assert p.equipment_access is None  # unasked ≠ full gym — the intake must see it missing
     assert p.goals == [] and p.priority_muscles == []
+
+
+def test_availability_window_normalizes_human_times():
+    # "7:00" and "07:00" must serialize identically — one canonical form.
+    w = AvailabilityWindow(weekday=Weekday.fri, start="7:00", end=" 20:5 ")
+    assert w.start == "07:00" and w.end == "20:05"
+
+
+def test_availability_window_rejects_impossible_times():
+    for bad in ("99:99", "24:00", "23:60", "-1:30", "19:00:00", "19h30", "19"):
+        with pytest.raises(Exception, match="HH:MM|0-59|0-23"):
+            AvailabilityWindow(weekday=Weekday.fri, start=bad)
+
+
+def test_availability_window_allows_open_ended_slots():
+    # "Fri after 7" with no known close: start-only is the intended encoding.
+    w = AvailabilityWindow(weekday=Weekday.fri, start="19:00")
+    assert w.start == "19:00" and w.end is None
