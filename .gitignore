@@ -10,3 +10,6 @@ data/
 
 # Machine-local agent config (absolute home paths)
 /.zcode/config.json
+# Session-local plan-mode artifacts (harness writes them into the workspace;
+# scratch, not repo content)
+/.zcode/plans/
