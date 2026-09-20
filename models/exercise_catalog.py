@@ -71,11 +71,20 @@ _ENTRIES: list[tuple[str, MuscleGroup, list[str], list[MuscleGroup]]] = [
     ("Hanging Leg Raise", MuscleGroup.core, ["Leg Raise"], []),
 ]
 
+def lookup_key(name: str) -> str:
+    """Normalize a name for catalog lookup: the same `trim(lower(...))` the
+    injury table already applies to contraindications (skills/injuries.py).
+    Both sides must normalize identically or canonicalization and the ban
+    match stop composing (adversarial F1)."""
+    return name.strip().lower()
+
+
+# Keyed by lookup_key so a name's casing never decides whether it maps.
 _ALIAS_TO_CANONICAL: dict[str, tuple[str, MuscleGroup]] = {}
 for _canon, _mg, _aliases, _secondaries in _ENTRIES:
-    _ALIAS_TO_CANONICAL[_canon] = (_canon, _mg)
+    _ALIAS_TO_CANONICAL[lookup_key(_canon)] = (_canon, _mg)
     for _a in _aliases:
-        _ALIAS_TO_CANONICAL[_a] = (_canon, _mg)
+        _ALIAS_TO_CANONICAL[lookup_key(_a)] = (_canon, _mg)
 
 # Helms ch03 overlap doctrine: an exercise's sets count 1:1 toward its
 # SECONDARY muscles as well as its primary. Analytics-only — the sessions
@@ -133,14 +142,14 @@ _KEYWORD_RULES: list[tuple[str, MuscleGroup]] = [
 def canonicalize(raw_name: str) -> tuple[str, MuscleGroup, bool]:
     """Return (canonical_name, muscle_group, needs_review).
 
-    Exact alias match → needs_review=False. Keyword fallback → True so the
-    user can confirm the guessed mapping via /status review.
+    Alias match (case-insensitive) → needs_review=False. Keyword fallback →
+    True so the user can confirm the guessed mapping via /status review.
     """
     key = raw_name.strip()
-    if key in _ALIAS_TO_CANONICAL:
-        can, mg = _ALIAS_TO_CANONICAL[key]
-        return can, mg, False
     low = key.lower()
+    if low in _ALIAS_TO_CANONICAL:
+        can, mg = _ALIAS_TO_CANONICAL[low]
+        return can, mg, False
     for kw, mg in _KEYWORD_RULES:
         if kw in low:
             return key, mg, True
