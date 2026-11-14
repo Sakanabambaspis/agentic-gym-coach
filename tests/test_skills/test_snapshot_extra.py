@@ -57,10 +57,10 @@ def test_block_state_counts_weeks_and_blocks_since_deload():
 def test_representative_lifts_are_canonical_names():
     # A drift guard: snapshot 1RM lookups only work if every representative
     # lift is a canonical (alias-table) name.
-    from models.exercise_catalog import _ALIAS_TO_CANONICAL
+    from models.exercise_catalog import _ALIAS_TO_CANONICAL, lookup_key
     for lift in REPRESENTATIVE_LIFTS:
-        assert lift in _ALIAS_TO_CANONICAL, f"{lift} is not a canonical name"
-        assert _ALIAS_TO_CANONICAL[lift][0] == lift
+        assert lookup_key(lift) in _ALIAS_TO_CANONICAL, f"{lift} is not a canonical name"
+        assert _ALIAS_TO_CANONICAL[lookup_key(lift)][0] == lift
 
 
 def test_empty_exercise_model_roundtrip_in_window():

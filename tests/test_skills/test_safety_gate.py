@@ -46,3 +46,14 @@ def test_alias_canonicalized_before_match():
     _seed_injury(contra=["Skull Crusher"], alts=["Tricep Pushdown"])
     r = check_exercise_safety("Dumbbell Skull Crusher")
     assert r.safe is False  # alias matches canonical banned name
+
+
+def test_lowercase_alias_still_blocked():
+    # regression: "Dumbbell Skull Crusher" canonicalized and matched, but its
+    # lowercase spelling missed the catalog, kept its raw name, and matched
+    # nothing in the ban list -> safe=true for a banned exercise (F1 residual)
+    _seed_injury(contra=["Skull Crusher"], alts=["Tricep Pushdown"])
+    r = check_exercise_safety("dumbbell skull crusher")
+    assert r.safe is False
+    assert r.exercise == "Skull Crusher"
+    assert "Tricep Pushdown" in r.alternatives

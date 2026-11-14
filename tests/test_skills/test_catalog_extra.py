@@ -2,7 +2,8 @@
 
 from models import MuscleGroup
 from models.exercise_catalog import (
-    SECONDARY_OVERLAP, _ALIAS_TO_CANONICAL, canonicalize, secondary_exercises,
+    SECONDARY_OVERLAP, _ALIAS_TO_CANONICAL, canonicalize, lookup_key,
+    secondary_exercises,
 )
 
 
@@ -15,12 +16,19 @@ def test_alias_hit_maps_to_canonical():
     assert canonicalize("Overhead Press") == ("Shoulder Press", MuscleGroup.side_delt, False)
 
 
-def test_alias_hits_are_case_sensitive():
-    # exact-table lookup is case-sensitive; wrong case falls to keyword guess
-    name, mg, review = canonicalize("overhead press")
-    assert review is True
-    assert mg == MuscleGroup.side_delt  # keyword still guesses the right group
-    assert name == "overhead press"     # but returns the RAW name (audit P1)
+def test_alias_hits_are_case_insensitive():
+    # casing must not decide whether a catalog name maps: an unmapped name
+    # keeps its raw spelling, which the safety gate then fails to match
+    for raw in ("overhead press", "OVERHEAD PRESS", "  Overhead Press  "):
+        assert canonicalize(raw) == ("Shoulder Press", MuscleGroup.side_delt, False)
+
+
+def test_case_variant_keeps_its_secondary_overlap():
+    # "incline bench press" used to miss the table, so trend_analysis credited
+    # no secondaries and under-counted triceps/side_delt hard sets
+    name, _mg, review = canonicalize("incline bench press")
+    assert (name, review) == ("Incline Bench Press", False)
+    assert SECONDARY_OVERLAP[name] == [MuscleGroup.triceps, MuscleGroup.side_delt]
 
 
 def test_keyword_fallback_returns_raw_name_with_review():
@@ -54,8 +62,8 @@ def test_sqlish_name_passes_through_literally():
 
 def test_secondary_overlap_reverse_map_is_consistent():
     for canon, secondaries in SECONDARY_OVERLAP.items():
-        assert canon in _ALIAS_TO_CANONICAL, f"{canon} not canonical"
-        assert _ALIAS_TO_CANONICAL[canon][0] == canon
+        assert lookup_key(canon) in _ALIAS_TO_CANONICAL, f"{canon} not canonical"
+        assert _ALIAS_TO_CANONICAL[lookup_key(canon)][0] == canon
         for m in secondaries:
             assert canon in secondary_exercises(m), f"{canon} missing from reverse map for {m}"
 
